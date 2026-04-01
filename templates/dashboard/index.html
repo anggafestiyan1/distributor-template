@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h4><i class="bi bi-speedometer2 me-2"></i>Dashboard</h4>
+  <span class="text-muted small">Welcome, {{ user.get_full_name|default:user.username }}</span>
+</div>
+
+<!-- Primary Stat Cards -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card stat-card-primary">
+      <i class="bi bi-cloud-upload stat-icon"></i>
+      <div class="stat-label">Total Uploads</div>
+      <div class="stat-value">{{ total_batches }}</div>
+      <div class="stat-sub">{{ processed_batches }} processed</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card stat-card-warning">
+      <i class="bi bi-hourglass-split stat-icon"></i>
+      <div class="stat-label">Awaiting Review</div>
+      <div class="stat-value">{{ pending_review_runs }}</div>
+      <div class="stat-sub">runs with pending rows</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card stat-card-danger">
+      <i class="bi bi-exclamation-triangle stat-icon"></i>
+      <div class="stat-label">Mismatched</div>
+      <div class="stat-value">{{ mismatch_batches }}</div>
+      <div class="stat-sub">no template matched</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card stat-card-success">
+      <i class="bi bi-database-check stat-icon"></i>
+      <div class="stat-label">Master Records</div>
+      <div class="stat-value">{{ master_record_count }}</div>
+      <div class="stat-sub">approved rows stored</div>
+    </div>
+  </div>
+</div>
+
+<!-- Secondary Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-muted">Processing</div>
+      <strong class="text-info">{{ processing_batches }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-muted">Pending</div>
+      <strong class="text-warning">{{ pending_batches }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-success">Rows Approved</div>
+      <strong class="text-success">{{ total_approved_rows }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-danger">Rows Rejected</div>
+      <strong class="text-danger">{{ total_rejected_rows }}</strong>
+    </div>
+  </div>
+</div>
+
+{% if total_distributors is not None %}
+<!-- Admin-only counters -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-muted">Active Distributors</div>
+      <strong>{{ total_distributors }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-muted">Active Users</div>
+      <strong>{{ total_users }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 px-3">
+      <div class="small text-muted">Error Uploads</div>
+      <strong class="text-danger">{{ error_batches }}</strong>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Recent Activity -->
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-1"></i>Recent Uploads</span>
+        <a href="{% url 'uploads:batch_list' %}" class="btn btn-sm btn-outline-secondary">View All</a>
+      </div>
+      <div class="table-scroll">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>File</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody>
+            {% for batch in recent_batches %}
+            <tr>
+              <td>
+                <a href="{% url 'uploads:batch_detail' batch.pk %}"
+                   class="text-truncate d-block fw-medium" style="max-width:180px;">
+                  {{ batch.original_filename }}
+                </a>
+                <small class="text-muted">{{ batch.distributor.code }}</small>
+              </td>
+              <td><span class="badge bg-{{ batch.status_badge_class }}">{{ batch.get_status_display }}</span></td>
+              <td class="text-muted small text-nowrap">{{ batch.created_at|date:"d M H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3">
+              <div class="empty-state py-4">
+                <i class="bi bi-cloud-upload"></i><p>No uploads yet.</p>
+              </div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-activity me-1"></i>Recent Processing Runs</span>
+        <a href="{% url 'review:queue' %}" class="btn btn-sm btn-outline-secondary">Review Queue</a>
+      </div>
+      <div class="table-scroll">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>Batch</th><th>Approval</th><th>Date</th></tr></thead>
+          <tbody>
+            {% for run in recent_runs %}
+            <tr>
+              <td>
+                <a href="{% url 'review:review_batch' run.pk %}" class="fw-medium">
+                  {{ run.batch.original_filename|truncatechars:28 }}
+                </a>
+                <small class="text-muted d-block">{{ run.batch.distributor.code }}</small>
+              </td>
+              <td>
+                {% if run.template_version %}
+                <span class="badge bg-{{ run.approval_badge_class }}">{{ run.approval_status|title }}</span>
+                {% else %}
+                <span class="badge bg-secondary">No template</span>
+                {% endif %}
+              </td>
+              <td class="text-muted small text-nowrap">{{ run.started_at|date:"d M H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3">
+              <div class="empty-state py-4">
+                <i class="bi bi-inbox"></i><p>No runs yet.</p>
+              </div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

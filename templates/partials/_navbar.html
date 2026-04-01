@@ -1,0 +1,21 @@
+<nav class="navbar navbar-dark bg-dark sticky-top flex-md-nowrap p-0 shadow">
+  <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6 fw-semibold" href="{% url 'dashboard:index' %}">
+    <i class="bi bi-grid-fill me-1"></i> Distributor Portal
+  </a>
+  <button class="navbar-toggler d-md-none ms-2" type="button"
+          data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="ms-auto px-3 d-flex align-items-center gap-2">
+    <span class="text-white-50 small d-none d-sm-inline">
+      {{ user.get_full_name|default:user.username }}
+      <span class="badge bg-secondary ms-1">{{ user.get_role_display }}</span>
+    </span>
+    <form method="post" action="{% url 'accounts:logout' %}" class="m-0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-box-arrow-right"></i> Logout
+      </button>
+    </form>
+  </div>
+</nav>

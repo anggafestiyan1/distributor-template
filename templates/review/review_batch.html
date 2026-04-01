@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% load core_tags %}
+{% block title %}Review: {{ run.batch.original_filename }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="{% url 'review:queue' %}">Review Queue</a></li>
+        <li class="breadcrumb-item active">{{ run.batch.original_filename|truncatechars:40 }}</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>{{ run.batch.original_filename }}</h4>
+  </div>
+  <a href="{% url 'review:queue' %}" class="btn btn-sm btn-outline-secondary flex-shrink-0">← Queue</a>
+</div>
+
+<!-- Summary cards -->
+{% include "review/partials/_review_summary.html" with run=run %}
+
+<!-- Bulk actions -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <form method="post" action="{% url 'review:approve_all' run.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-sm btn-success">
+      <i class="bi bi-check-all me-1"></i>Approve All Pending
+    </button>
+  </form>
+  <form method="post" action="{% url 'review:reject_all' run.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-sm btn-danger">
+      <i class="bi bi-x-circle me-1"></i>Reject All Pending
+    </button>
+  </form>
+  {% with s=run.review_summary %}
+  <form method="post" action="{% url 'review:finalize' run.pk %}"
+        onsubmit="return confirm('Push {{ s.approved }} approved row(s) to Master Data? Rejected rows will be skipped.')">
+    {% csrf_token %}
+    {% if s.pending > 0 %}
+      <button type="button" class="btn btn-sm btn-secondary"
+              title="{{ s.pending }} row(s) still pending — review all rows before finalizing" disabled>
+        <i class="bi bi-lock me-1"></i>Finalize → Master Data
+        <span class="badge bg-white text-secondary ms-1">{{ s.pending }} pending</span>
+      </button>
+    {% elif s.approved == 0 %}
+      <button type="button" class="btn btn-sm btn-secondary" disabled
+              title="No approved rows to finalize">
+        <i class="bi bi-send me-1"></i>Finalize → Master Data
+      </button>
+    {% else %}
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="bi bi-send me-1"></i>Finalize → Master Data
+        <span class="badge bg-white text-primary ms-1">{{ s.approved }}</span>
+      </button>
+    {% endif %}
+  </form>
+  {% endwith %}
+</div>
+
+<!-- Filter tabs -->
+<ul class="nav nav-tabs mb-0 border-bottom-0">
+  <li class="nav-item">
+    <a class="nav-link {% if filter_type == 'all' %}active{% endif %}"
+       href="?filter=all">
+      All <span class="badge bg-secondary ms-1">{{ counts.all }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_type == 'pending' %}active{% endif %}"
+       href="?filter=pending">
+      Pending <span class="badge bg-secondary ms-1">{{ counts.pending }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_type == 'approved' %}active{% endif %}"
+       href="?filter=approved">
+      Approved <span class="badge bg-success ms-1">{{ counts.approved }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_type == 'rejected' %}active{% endif %}"
+       href="?filter=rejected">
+      Rejected <span class="badge bg-danger ms-1">{{ counts.rejected }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_type == 'problem' %}active{% endif %} {% if counts.problem > 0 and filter_type != 'problem' %}text-danger{% endif %}"
+       href="?filter=problem">
+      <i class="bi bi-exclamation-triangle me-1"></i>Problem
+      <span class="badge bg-danger ms-1">{{ counts.problem }}</span>
+    </a>
+  </li>
+</ul>
+
+<!-- Table -->
+<div class="card rounded-top-0">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem;">
+      <thead class="table-light sticky-top">
+        <tr>
+          <th class="text-muted fw-normal" style="width:48px;">#</th>
+          {% for col_name, col_label in columns %}
+          <th>{{ col_label }}</th>
+          {% endfor %}
+          <th style="min-width:140px;">Issues</th>
+          <th style="width:90px;">Status</th>
+          <th style="width:80px;"></th>
+        </tr>
+      </thead>
+      <tbody id="row-list">
+        {% for row in rows %}
+          {% include "review/partials/_row_tr.html" %}
+        {% empty %}
+          <tr>
+            <td colspan="{{ columns|length|add:4 }}" class="text-center text-muted py-5">
+              <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+              No rows found for this filter.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if rows.has_other_pages %}
+<div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
+  <span>
+    Page {{ rows.number }} of {{ rows.paginator.num_pages }}
+    &mdash; {{ counts.all }} total rows
+  </span>
+  <div class="d-flex gap-1">
+    {% if rows.has_previous %}
+    <a href="?filter={{ filter_type }}&page={{ rows.previous_page_number }}"
+       class="btn btn-sm btn-outline-secondary">‹ Prev</a>
+    {% endif %}
+    {% for num in rows.paginator.page_range %}
+      {% if num == rows.number %}
+        <span class="btn btn-sm btn-secondary disabled">{{ num }}</span>
+      {% elif num == 1 or num == rows.paginator.num_pages or num >= rows.number|add:"-2" and num <= rows.number|add:"2" %}
+        <a href="?filter={{ filter_type }}&page={{ num }}"
+           class="btn btn-sm btn-outline-secondary">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if rows.has_next %}
+    <a href="?filter={{ filter_type }}&page={{ rows.next_page_number }}"
+       class="btn btn-sm btn-outline-secondary">Next ›</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load core_tags %}
+{% block title %}Master Record #{{ record.pk }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Master Record #{{ record.pk }}</h4>
+  <a href="{% url 'master_data:record_list' %}" class="btn btn-sm btn-outline-secondary">← Back</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Metadata</div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item"><strong>Distributor:</strong> {{ record.distributor.name }}</li>
+        <li class="list-group-item"><strong>Area:</strong> {{ record.area }}</li>
+        <li class="list-group-item"><strong>Imported:</strong> {{ record.imported_at|date:"d M Y H:i" }}</li>
+        {% if record.template_version %}
+        <li class="list-group-item"><strong>Template:</strong> {{ record.template_version }}</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">Data</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th>Field</th><th>Value</th></tr></thead>
+          <tbody>
+            {% for key, label, value in data_columns %}
+            <tr>
+              <td><code>{{ key }}</code><br><small class="text-muted">{{ label }}</small></td>
+              <td>{{ value|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-muted text-center py-3">No data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

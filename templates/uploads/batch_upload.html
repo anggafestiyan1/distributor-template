@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Upload File{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h4 class="mb-3"><i class="bi bi-upload me-2"></i>Upload File</h4>
+    <div class="card">
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {% if form.auto_distributor %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Distributor</label>
+              <div class="form-control bg-light text-muted">{{ form.auto_distributor.name }} ({{ form.auto_distributor.code }})</div>
+              {{ form.distributor }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">{{ form.file.label }}</label>
+              {{ form.file }}
+              {% if form.file.errors %}<div class="text-danger small">{{ form.file.errors }}</div>{% endif %}
+              {% if form.file.help_text %}<div class="form-text">{{ form.file.help_text }}</div>{% endif %}
+            </div>
+          {% else %}
+            {% for field in form %}
+              <div class="mb-3">
+                <label class="form-label fw-semibold">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          {% endif %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload me-1"></i> Upload & Process
+            </button>
+            <a href="{% url 'uploads:batch_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

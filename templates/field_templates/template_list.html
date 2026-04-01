@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Templates{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h4><i class="bi bi-layout-text-window-reverse me-2"></i>Templates</h4>
+  <a href="{% url 'field_templates:template_create' %}" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> New Template
+  </a>
+</div>
+
+<p class="text-muted small mb-3">
+  Templates define how distributor file columns map to
+  <a href="{% url 'field_templates:field_list' %}">Standard Fields</a>.
+  <strong>Global</strong> templates apply to all distributors.
+  <strong>Distributor</strong> templates apply only to the assigned distributor.
+</p>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="templateTabs">
+  <li class="nav-item">
+    <a class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-global">
+      <i class="bi bi-globe me-1"></i>Global
+      <span class="badge bg-secondary ms-1">{{ global_templates|length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-assigned">
+      <i class="bi bi-building me-1"></i>Distributor
+      <span class="badge bg-secondary ms-1">{{ assigned_templates|length }}</span>
+    </a>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <!-- Global Templates -->
+  <div class="tab-pane fade show active" id="tab-global">
+    <div class="card">
+      <div class="table-scroll">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>Name</th><th>Code</th><th>Latest Version</th><th>Active</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for tmpl in global_templates %}
+            {% with latest=tmpl.get_latest_version %}
+            <tr>
+              <td><a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="fw-medium">{{ tmpl.name }}</a></td>
+              <td><code>{{ tmpl.code }}</code></td>
+              <td>
+                {% if latest %}
+                  <a href="{% url 'field_templates:version_detail' latest.pk %}">v{{ latest.version_number }}</a>
+                  &mdash; {{ latest.field_mappings.count }} fields
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if latest and latest.is_active %}
+                  <span class="badge bg-success">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                  <a href="{% url 'field_templates:template_edit' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  <form method="post" action="{% url 'field_templates:template_delete' tmpl.pk %}"
+                        onsubmit="return confirm('Delete template \'{{ tmpl.name }}\'? All versions will be removed.')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="5">
+              <div class="empty-state">
+                <i class="bi bi-globe"></i>
+                <p>No global templates yet.<br>
+                  <a href="{% url 'field_templates:template_create' %}">Create one</a> to get started.
+                </p>
+              </div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distributor Templates -->
+  <div class="tab-pane fade" id="tab-assigned">
+    <div class="card">
+      <div class="table-scroll">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>Name</th><th>Code</th><th>Distributor</th><th>Latest Version</th><th>Active</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for tmpl in assigned_templates %}
+            {% with latest=tmpl.get_latest_version %}
+            <tr>
+              <td><a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="fw-medium">{{ tmpl.name }}</a></td>
+              <td><code>{{ tmpl.code }}</code></td>
+              <td>
+                {% if tmpl.distributor %}
+                  <a href="{% url 'distributors:detail' tmpl.distributor.pk %}">{{ tmpl.distributor.name }}</a>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td>
+                {% if latest %}
+                  <a href="{% url 'field_templates:version_detail' latest.pk %}">v{{ latest.version_number }}</a>
+                  &mdash; {{ latest.field_mappings.count }} fields
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if latest and latest.is_active %}
+                  <span class="badge bg-success">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                  <a href="{% url 'field_templates:template_edit' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  <form method="post" action="{% url 'field_templates:template_delete' tmpl.pk %}"
+                        onsubmit="return confirm('Delete template \'{{ tmpl.name }}\'? All versions will be removed.')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="6">
+              <div class="empty-state">
+                <i class="bi bi-building"></i>
+                <p>No distributor-specific templates yet.</p>
+              </div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

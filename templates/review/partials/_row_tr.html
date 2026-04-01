@@ -1,0 +1,52 @@
+{% load core_tags %}
+<tr id="row-{{ row.pk }}"
+    class="{% if row.review_decision == 'approved' %}table-success{% elif row.review_decision == 'rejected' %}table-danger{% elif row.row_status == 'invalid' %}table-warning{% elif row.row_status == 'warning' %}table-warning{% endif %}">
+
+  <td class="text-muted">{{ row.row_number }}</td>
+
+  {% for col_name, col_label in columns %}
+  <td>{{ row.mapped_data|get_item:col_name|default:"" }}</td>
+  {% endfor %}
+
+  <!-- Issues -->
+  <td>
+    {% for issue in row.validation_issues.all %}
+      <span class="badge bg-{{ issue.severity_badge_class }} me-1"
+            style="font-size:.7rem;"
+            title="{{ issue.message }}">
+        {{ issue.code }}{% if issue.field_name %} ({{ issue.field_name }}){% endif %}
+      </span>
+    {% endfor %}
+  </td>
+
+  <!-- Decision status -->
+  <td>
+    <span class="badge bg-{{ row.decision_badge_class }}">
+      {{ row.get_review_decision_display }}
+    </span>
+  </td>
+
+  <!-- Approve / Reject buttons -->
+  <td class="text-nowrap">
+    {% if row.review_decision == 'pending' %}
+    <button hx-post="{% url 'review:approve_row' row.pk %}"
+            hx-target="#row-{{ row.pk }}"
+            hx-swap="outerHTML"
+            class="btn btn-sm btn-success px-2 py-1"
+            title="Approve">
+      <i class="bi bi-check-lg"></i>
+    </button>
+    <button hx-post="{% url 'review:reject_row' row.pk %}"
+            hx-target="#row-{{ row.pk }}"
+            hx-swap="outerHTML"
+            class="btn btn-sm btn-danger px-2 py-1"
+            title="Reject">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    {% elif row.review_decision == 'approved' %}
+      <i class="bi bi-check-circle-fill text-success fs-5"></i>
+    {% elif row.review_decision == 'rejected' %}
+      <i class="bi bi-x-circle-fill text-danger fs-5"></i>
+    {% endif %}
+  </td>
+</tr>

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Standard Fields{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h4><i class="bi bi-list-columns-reverse me-2"></i>Standard Master Fields</h4>
+  <a href="{% url 'field_templates:field_create' %}" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> New Field
+  </a>
+</div>
+
+<div class="card mb-4">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:3rem">#</th>
+          <th>Code</th>
+          <th>Display Name</th>
+          <th>Type</th>
+          <th>Required</th>
+          <th>Active</th>
+          <th>Aliases</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in fields %}
+        <tr class="{% if not f.is_active %}text-muted{% endif %}">
+          <td class="text-muted">{{ f.order }}</td>
+          <td><code>{{ f.name }}</code></td>
+          <td class="fw-medium {% if not f.is_active %}text-decoration-line-through{% endif %}">{{ f.display_name }}</td>
+          <td>
+            <span class="badge bg-light text-dark border">{{ f.get_data_type_display }}</span>
+            {% if f.batch_context_source %}
+              <span class="badge bg-info text-dark ms-1" title="Auto-filled from: {{ f.get_batch_context_source_display }}">
+                <i class="bi bi-lightning-fill"></i> {{ f.get_batch_context_source_display }}
+              </span>
+            {% endif %}
+          </td>
+
+          <!-- Required toggle -->
+          <td>
+            <form method="post" action="{% url 'field_templates:field_toggle_required' f.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn btn-sm {% if f.is_required %}btn-danger{% else %}btn-outline-secondary{% endif %}"
+                      title="{% if f.is_required %}Click to make optional{% else %}Click to make required{% endif %}">
+                {% if f.is_required %}Required{% else %}Optional{% endif %}
+              </button>
+            </form>
+          </td>
+
+          <!-- Active toggle -->
+          <td>
+            <form method="post" action="{% url 'field_templates:field_toggle_active' f.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn btn-sm {% if f.is_active %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                      title="{% if f.is_active %}Click to hide from reports{% else %}Click to show in reports{% endif %}">
+                {% if f.is_active %}
+                  <i class="bi bi-toggle-on me-1"></i>On
+                {% else %}
+                  <i class="bi bi-toggle-off me-1"></i>Off
+                {% endif %}
+              </button>
+            </form>
+          </td>
+
+          <td>
+            <a href="{% url 'field_templates:field_aliases' f.pk %}" class="text-decoration-none">
+              <span class="badge bg-light text-dark border">
+                <i class="bi bi-tag me-1"></i>{{ f.aliases.count }}
+              </span>
+            </a>
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{% url 'field_templates:field_edit' f.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <a href="{% url 'field_templates:field_aliases' f.pk %}" class="btn btn-sm btn-outline-primary">Aliases</a>
+              {% if f.has_master_data %}
+                <button class="btn btn-sm btn-outline-danger" disabled
+                        title="Cannot delete: master data records use this field. Hide it with the Active toggle instead.">
+                  Delete
+                </button>
+              {% else %}
+                <form method="post" action="{% url 'field_templates:field_delete' f.pk %}"
+                      onsubmit="return confirm('Delete field \'{{ f.display_name }}\'? This cannot be undone.')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8">
+            <div class="empty-state">
+              <i class="bi bi-list-columns-reverse"></i>
+              <p>No standard fields defined yet.<br>
+                <a href="{% url 'field_templates:field_create' %}">Add your first field</a> to get started.
+              </p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Template Preview -->
+{% if fields %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-file-earmark-spreadsheet me-1"></i>Output Template Preview</span>
+    <a href="{% url 'field_templates:template_download' %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-download me-1"></i>Download Sample (.xlsx)
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <p class="text-muted small px-3 pt-3 mb-2">
+      This is how the standard master output file is structured. Use this as a reference when configuring
+      templates and aliases — and share it with distributors to align their file formats.
+    </p>
+    <div class="template-preview-wrap">
+      <table class="template-preview-table w-100">
+        <thead>
+          <tr>
+            {% for f in fields %}
+            <th>
+              {{ f.display_name }}
+              <span class="col-type">{{ f.get_data_type_display }}</span>
+              {% if f.is_required %}<span class="col-required">* required</span>{% endif %}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {% for f in fields %}
+            <td class="text-muted small px-3 py-2" style="border-right:1px solid #e9ecef;">
+              {% if f.data_type == 'string' %}example text
+              {% elif f.data_type == 'integer' %}1234
+              {% elif f.data_type == 'decimal' %}12.50
+              {% elif f.data_type == 'date' %}2024-01-15
+              {% elif f.data_type == 'boolean' %}true
+              {% else %}—
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

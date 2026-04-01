@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Master Data{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4><i class="bi bi-database me-2"></i>Master Data</h4>
+    <p class="page-subtitle">Approved records promoted from reviewed batches</p>
+  </div>
+  <a href="{% url 'master_data:export' %}" class="btn btn-sm btn-outline-success flex-shrink-0">
+    <i class="bi bi-download me-1"></i>Export
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center filter-bar" id="filter-form">
+
+      <div class="col-sm-4 col-md-3">
+        <input type="text" name="q" value="{{ filter_q }}"
+               class="form-control form-control-sm"
+               placeholder="Search by key…"
+               hx-get="{% url 'master_data:record_list' %}"
+               hx-trigger="keyup changed delay:400ms"
+               hx-target="#record-table-body"
+               hx-swap="innerHTML"
+               hx-include="#filter-form"
+               hx-indicator="#filter-spinner">
+      </div>
+
+      <div class="col-sm-3 col-md-2">
+        <select name="area" class="form-select form-select-sm"
+                hx-get="{% url 'master_data:record_list' %}"
+                hx-trigger="change"
+                hx-target="#record-table-body"
+                hx-swap="innerHTML"
+                hx-include="#filter-form"
+                hx-indicator="#filter-spinner">
+          <option value="">All areas</option>
+          {% for a in areas %}
+            <option value="{{ a.name }}" {% if filter_area == a.name %}selected{% endif %}>
+              {{ a.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-sm-4 col-md-3">
+        <select name="distributor" class="form-select form-select-sm"
+                hx-get="{% url 'master_data:record_list' %}"
+                hx-trigger="change"
+                hx-target="#record-table-body"
+                hx-swap="innerHTML"
+                hx-include="#filter-form"
+                hx-indicator="#filter-spinner">
+          <option value="">All distributors</option>
+          {% for d in distributors %}
+            <option value="{{ d.pk }}" {% if filter_distributor == d.pk|stringformat:"s" %}selected{% endif %}>
+              {{ d.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-sm-3 col-md-2">
+        <input type="date" name="date_from" value="{{ filter_date_from }}"
+               class="form-control form-control-sm"
+               title="From date"
+               hx-get="{% url 'master_data:record_list' %}"
+               hx-trigger="change"
+               hx-target="#record-table-body"
+               hx-swap="innerHTML"
+               hx-include="#filter-form"
+               hx-indicator="#filter-spinner">
+      </div>
+
+      <div class="col-6 col-sm-3 col-md-2">
+        <input type="date" name="date_to" value="{{ filter_date_to }}"
+               class="form-control form-control-sm"
+               title="To date"
+               hx-get="{% url 'master_data:record_list' %}"
+               hx-trigger="change"
+               hx-target="#record-table-body"
+               hx-swap="innerHTML"
+               hx-include="#filter-form"
+               hx-indicator="#filter-spinner">
+      </div>
+
+      <div class="col-auto d-flex gap-1 align-items-center">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+        <a href="{% url 'master_data:record_list' %}" class="btn btn-sm btn-link text-decoration-none text-muted">Clear</a>
+        <span id="filter-spinner" class="htmx-indicator spinner-border spinner-border-sm text-primary ms-1"></span>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Bulk delete form wraps the table -->
+<form method="post" action="{% url 'master_data:bulk_delete' %}" id="bulk-form"
+      onsubmit="return confirm('Delete selected records? This cannot be undone.')">
+  {% csrf_token %}
+
+  <!-- Hidden filter state forwarded to bulk delete -->
+  <input type="hidden" name="area" value="{{ filter_area }}">
+  <input type="hidden" name="distributor" value="{{ filter_distributor }}">
+  <input type="hidden" name="date_from"   value="{{ filter_date_from }}">
+  <input type="hidden" name="date_to"     value="{{ filter_date_to }}">
+  <input type="hidden" name="q"           value="{{ filter_q }}">
+
+  <!-- Bulk action bar — hidden until at least one checkbox is ticked -->
+  <div id="bulk-action-bar" class="d-none d-flex align-items-center gap-2 mb-2 flex-wrap">
+    <span id="selected-count" class="small text-muted"></span>
+    <button type="submit" name="delete_all" value="0" class="btn btn-sm btn-danger"
+            onclick="return confirm('Delete selected records? This cannot be undone.')">
+      <i class="bi bi-trash me-1"></i>Delete Selected
+    </button>
+    {% if request.user.is_admin or request.user.is_superuser %}
+    <button type="submit" name="delete_all" value="1" id="btn-delete-all"
+            class="btn btn-sm btn-outline-danger d-none"
+            onclick="return confirm('Delete ALL records across all pages matching the current filter? This cannot be undone.')">
+      <i class="bi bi-trash3 me-1"></i>Delete All
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="table-scroll">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:36px;">
+              <input type="checkbox" id="select-all" class="form-check-input" title="Select all">
+            </th>
+            {% for sf in standard_fields %}
+            <th>{{ sf.display_name }}</th>
+            {% endfor %}
+            <th>Imported</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="record-table-body">
+          {% include "master_data/partials/_record_table.html" %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+
+{% include "partials/_pagination.html" %}
+
+<script>
+(function () {
+  const selectAll   = document.getElementById('select-all');
+  const bulkBar     = document.getElementById('bulk-action-bar');
+  const countEl     = document.getElementById('selected-count');
+  const btnDeleteAll = document.getElementById('btn-delete-all'); // null for non-admin
+
+  function updateBar() {
+    const checked = document.querySelectorAll('.row-checkbox:checked');
+    if (checked.length > 0) {
+      bulkBar.classList.remove('d-none');
+      countEl.textContent = checked.length + ' selected';
+    } else {
+      bulkBar.classList.add('d-none');
+      countEl.textContent = '';
+    }
+    // Show "Delete All" only for admin AND only when header select-all is checked
+    if (btnDeleteAll) {
+      if (selectAll.checked) {
+        btnDeleteAll.classList.remove('d-none');
+      } else {
+        btnDeleteAll.classList.add('d-none');
+      }
+    }
+  }
+
+  selectAll.addEventListener('change', function () {
+    document.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = this.checked; });
+    updateBar();
+  });
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('row-checkbox')) {
+      if (!e.target.checked) selectAll.checked = false;
+      updateBar();
+    }
+  });
+})();
+</script>
+
+{% endblock %}

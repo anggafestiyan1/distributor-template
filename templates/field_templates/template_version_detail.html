@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ version }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">{{ version }}</h4>
+  <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-sm btn-outline-secondary">
+    Back to Template
+  </a>
+</div>
+{% if version.is_in_use %}
+<div class="alert alert-warning">This version is in use and cannot be edited. Create a new version to make changes.</div>
+{% else %}
+<a href="{% url 'field_templates:version_mappings' version.pk %}" class="btn btn-sm btn-primary mb-3">Edit Mappings</a>
+{% endif %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-light"><tr><th>Standard Field</th><th>Source Column</th><th>Normalized</th></tr></thead>
+    <tbody>
+      {% for m in mappings %}
+      <tr>
+        <td><code>{{ m.standard_field.name }}</code></td>
+        <td>{{ m.source_column }}</td>
+        <td class="text-muted small"><code>{{ m.source_column_normalized }}</code></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="text-muted text-center">No mappings.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

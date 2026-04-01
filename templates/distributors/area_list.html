@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Areas{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4><i class="bi bi-geo-alt me-2"></i>Areas</h4>
+    <p class="page-subtitle">Geographic or business areas assigned to distributors</p>
+  </div>
+  <a href="{% url 'distributors:area_create' %}" class="btn btn-sm btn-primary flex-shrink-0">
+    <i class="bi bi-plus-lg me-1"></i> New Area
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr><th>Name</th><th>Code</th><th>Description</th><th>Status</th><th>Distributors</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for area in areas %}
+        <tr>
+          <td class="fw-medium">{{ area.name }}</td>
+          <td><code>{{ area.code }}</code></td>
+          <td class="text-muted small">{{ area.description|default:"—"|truncatechars:40 }}</td>
+          <td>
+            {% if area.is_active %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ area.distributors.count }}</td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{% url 'distributors:area_edit' area.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <form method="post" action="{% url 'distributors:area_delete' area.pk %}"
+                    onsubmit="return confirm('Delete area \'{{ area.name }}\'? This cannot be undone.')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6">
+            <div class="empty-state">
+              <i class="bi bi-geo-alt"></i>
+              <p class="empty-title">No areas yet</p>
+              <p><a href="{% url 'distributors:area_create' %}">Create the first area</a> to get started.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

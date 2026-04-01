@@ -1,0 +1,18 @@
+{% load core_tags %}
+{% for record in records %}
+<tr>
+  <td>
+    <input type="checkbox" name="selected_ids" value="{{ record.pk }}"
+           class="form-check-input row-checkbox">
+  </td>
+  {% for sf in standard_fields %}
+  <td>{{ record.data|get_item:sf.name|default:"—" }}</td>
+  {% endfor %}
+  <td class="small text-muted">{{ record.imported_at|date:"d M Y" }}</td>
+  <td>
+    <a href="{% url 'master_data:record_detail' record.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+  </td>
+</tr>
+{% empty %}
+<tr><td colspan="20" class="text-muted text-center py-3">No records found.</td></tr>
+{% endfor %}

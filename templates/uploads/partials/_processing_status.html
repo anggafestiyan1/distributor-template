@@ -1,0 +1,29 @@
+{% if batch.status == 'processing' or batch.status == 'pending' %}
+<div id="processing-status"
+     hx-get="{% url 'uploads:batch_status' batch.pk %}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     class="alert alert-info d-flex align-items-center">
+  <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+  <span>
+    {% if batch.status == 'pending' %}Queued for processing...
+    {% else %}Processing file — this may take a moment...{% endif %}
+  </span>
+</div>
+{% elif batch.status == 'error' %}
+<div id="processing-status" class="alert alert-danger">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  <strong>Processing error:</strong> {{ batch.error_message|default:"Unknown error." }}
+</div>
+{% elif batch.status == 'mismatch' %}
+<div id="processing-status" class="alert alert-warning">
+  <i class="bi bi-question-circle me-1"></i>
+  <strong>Template mismatch:</strong> No matching template found for this file's headers.
+  Please create a matching template and reprocess.
+</div>
+{% elif batch.status == 'processed' %}
+<div id="processing-status" class="alert alert-success">
+  <i class="bi bi-check-circle me-1"></i>
+  File processed successfully. <a href="{% url 'review:review_batch' batch.get_latest_run.pk %}">Review rows &rarr;</a>
+</div>
+{% endif %}

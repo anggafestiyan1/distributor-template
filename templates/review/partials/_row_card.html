@@ -1,0 +1,78 @@
+<div id="row-{{ row.pk }}" class="card mb-2 border-{{ row.status_badge_class }}">
+  <div class="card-header d-flex justify-content-between align-items-center py-2">
+    <span class="small fw-semibold">
+      Row #{{ row.row_number }}
+      <span class="badge bg-{{ row.status_badge_class }} ms-1">{{ row.get_row_status_display }}</span>
+    </span>
+    <span>
+      <span class="badge bg-{{ row.decision_badge_class }}">{{ row.get_review_decision_display }}</span>
+      {% if row.reviewed_by %}
+        <span class="text-muted small ms-1">by {{ row.reviewed_by.username }}</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="card-body py-2">
+    {% if row.validation_issues_list or row.validation_issues.exists %}
+    <div class="mb-2">
+      {% for issue in row.validation_issues_list|default:row.validation_issues.all %}
+      <span class="badge bg-{{ issue.severity_badge_class }} me-1">
+        [{{ issue.severity|upper }}] {{ issue.code }}{% if issue.field_name %} ({{ issue.field_name }}){% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row g-2">
+      <!-- Mapped data -->
+      <div class="col-md-6">
+        <div class="small fw-semibold text-muted mb-1">Mapped Data</div>
+        <div class="small font-monospace" style="max-height:120px;overflow-y:auto;">
+          {% for key, value in row.mapped_data.items %}
+            {% if value %}<div><span class="text-muted">{{ key }}:</span> {{ value }}</div>{% endif %}
+          {% empty %}
+            <span class="text-muted">No mapped data</span>
+          {% endfor %}
+        </div>
+      </div>
+      <!-- Raw data -->
+      <div class="col-md-6">
+        <div class="small fw-semibold text-muted mb-1">Raw Data</div>
+        <div class="small font-monospace text-muted" style="max-height:120px;overflow-y:auto;">
+          {% for key, value in row.raw_data.items %}
+            {% if value %}<div><span>{{ key }}:</span> {{ value }}</div>{% endif %}
+          {% empty %}
+            <span class="text-muted">—</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if row.review_note %}
+    <div class="small text-muted mt-2"><em>Note: {{ row.review_note }}</em></div>
+    {% endif %}
+
+    <!-- HTMX approve/reject buttons -->
+    {% if row.review_decision == 'pending' %}
+    <div class="d-flex gap-2 mt-2 align-items-end">
+      <textarea name="note" class="form-control form-control-sm" rows="1"
+                placeholder="Optional note..." id="note-{{ row.pk }}" style="flex:1;min-width:0;"></textarea>
+      <button
+        hx-post="{% url 'review:approve_row' row.pk %}"
+        hx-target="#row-{{ row.pk }}"
+        hx-swap="outerHTML"
+        hx-include="#note-{{ row.pk }}"
+        class="btn btn-sm btn-success">
+        <i class="bi bi-check-lg"></i> Approve
+      </button>
+      <button
+        hx-post="{% url 'review:reject_row' row.pk %}"
+        hx-target="#row-{{ row.pk }}"
+        hx-swap="outerHTML"
+        hx-include="#note-{{ row.pk }}"
+        class="btn btn-sm btn-danger">
+        <i class="bi bi-x-lg"></i> Reject
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>

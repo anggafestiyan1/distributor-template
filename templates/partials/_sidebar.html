@@ -1,0 +1,72 @@
+<nav id="sidebarMenu" class="sidebar col-md-3 col-lg-2 d-md-block bg-white collapse">
+  <div class="position-sticky pt-2 pb-3">
+    <ul class="nav flex-column">
+
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.namespace == 'dashboard' %}active{% endif %}"
+           href="{% url 'dashboard:index' %}">
+          <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.namespace == 'uploads' %}active{% endif %}"
+           href="{% url 'uploads:batch_list' %}">
+          <i class="bi bi-cloud-upload"></i> Uploads
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.namespace == 'review' %}active{% endif %}"
+           href="{% url 'review:queue' %}">
+          <i class="bi bi-clipboard-check"></i> Review
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.namespace == 'master_data' %}active{% endif %}"
+           href="{% url 'master_data:record_list' %}">
+          <i class="bi bi-database"></i> Master Data
+        </a>
+      </li>
+
+      {% if user.is_admin or user.is_superuser %}
+      <li class="nav-item mt-1">
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Settings</span>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'accounts' %}active{% endif %}"
+           href="{% url 'accounts:user_list' %}">
+          <i class="bi bi-people"></i> Users
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'distributors' and 'area' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'distributors:area_list' %}">
+          <i class="bi bi-geo-alt"></i> Areas
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'distributors' and 'area' not in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'distributors:list' %}">
+          <i class="bi bi-building"></i> Distributors
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'field_templates' and 'template' not in request.resolver_match.url_name and 'version' not in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'field_templates:field_list' %}">
+          <i class="bi bi-list-columns-reverse"></i> Standard Fields
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'field_templates' and 'field_' not in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'field_templates:template_list' %}">
+          <i class="bi bi-layout-text-window-reverse"></i> Templates
+        </a>
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+</nav>

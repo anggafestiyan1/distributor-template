@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% load core_tags %}
+{% block title %}{{ batch.original_filename }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="{% url 'uploads:batch_list' %}">Uploads</a></li>
+        <li class="breadcrumb-item active">{{ batch.original_filename|truncatechars:40 }}</li>
+      </ol>
+    </nav>
+    <h4><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ batch.original_filename }}</h4>
+  </div>
+  <a href="{% url 'uploads:batch_list' %}" class="btn btn-sm btn-outline-secondary flex-shrink-0">
+    <i class="bi bi-arrow-left me-1"></i> Back
+  </a>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="mini-stat text-center">
+      <div class="mini-label">Status</div>
+      <span class="badge bg-{{ batch.status_badge_class }} fs-6 mt-1">{{ batch.get_status_display }}</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="mini-stat text-center">
+      <div class="mini-label">Distributor</div>
+      <div class="mini-value fw-semibold">{{ batch.distributor.code }}</div>
+      <small class="text-muted">{{ batch.distributor.name|truncatechars:20 }}</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="mini-stat text-center">
+      <div class="mini-label">Rows</div>
+      <div class="mini-value">{{ batch.row_count|default:"—" }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="mini-stat text-center">
+      <div class="mini-label">Uploaded</div>
+      <div class="mini-value" style="font-size:.95rem;">{{ batch.created_at|date:"d M Y" }}</div>
+      <small class="text-muted">{{ batch.created_at|date:"H:i" }}</small>
+    </div>
+  </div>
+</div>
+
+<!-- HTMX processing status -->
+{% include "uploads/partials/_processing_status.html" %}
+
+{% if latest_run %}
+<div class="card mt-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-cpu me-1"></i>Latest Processing Run #{{ latest_run.run_number }}</span>
+    {% if latest_run.template_version %}
+      <a href="{% url 'review:review_batch' latest_run.pk %}" class="btn btn-sm btn-success">
+        <i class="bi bi-clipboard-check me-1"></i>Review Rows
+      </a>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <ul class="info-list">
+      <li>
+        <span class="info-label">Template</span>
+        <span class="info-value">
+          {% if latest_run.template_version %}
+            {{ latest_run.template_version }}
+            {% if latest_run.used_global %}
+              <span class="badge bg-info text-dark ms-1">Global</span>
+            {% else %}
+              <span class="badge bg-warning text-dark ms-1">Assigned</span>
+            {% endif %}
+            {% if latest_run.fallback_happened %}
+              <span class="badge bg-secondary ms-1">Fallback</span>
+            {% endif %}
+          {% else %}
+            <span class="text-danger fw-medium">No template matched</span>
+          {% endif %}
+        </span>
+      </li>
+      <li>
+        <span class="info-label">Match Score</span>
+        <span class="info-value">
+          {% if latest_run.match_score %}{{ latest_run.match_score|floatformat:0 }}%{% else %}—{% endif %}
+        </span>
+      </li>
+      <li>
+        <span class="info-label">Approval</span>
+        <span class="info-value">
+          <span class="badge bg-{{ latest_run.approval_badge_class }}">
+            {{ latest_run.approval_status|replace:"_: "|title }}
+          </span>
+        </span>
+      </li>
+    </ul>
+    <div class="px-3 pb-3 d-flex gap-2 flex-wrap">
+      <span class="badge bg-success">Approved: {{ latest_run.review_summary.approved }}</span>
+      <span class="badge bg-danger">Rejected: {{ latest_run.review_summary.rejected }}</span>
+      <span class="badge bg-secondary">Pending: {{ latest_run.review_summary.pending }}</span>
+      <span class="badge bg-light text-dark border">Total: {{ latest_run.review_summary.total }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Template match log -->
+{% if match_logs %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-search me-1"></i>Template Match Log</div>
+  <div class="table-scroll">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Template</th><th>Score</th><th>Scope</th><th>Matched</th><th>Column Details</th></tr>
+      </thead>
+      <tbody>
+        {% for log in match_logs %}
+        <tr>
+          <td>{{ log.template_version }}</td>
+          <td>{% widthratio log.match_score 1 100 %}%</td>
+          <td>
+            {% if log.is_assigned %}
+              <span class="badge bg-warning text-dark">Assigned</span>
+            {% else %}
+              <span class="badge bg-info text-dark">Global</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if log.matched %}
+              <span class="text-success fw-bold">✓</span>
+            {% else %}
+              <span class="text-danger">✗</span>
+            {% endif %}
+          </td>
+          <td class="small">
+            {% for col in log.matched_columns %}
+              <span class="badge bg-success me-1 mb-1">✓ {{ col }}</span>
+            {% endfor %}
+            {% for col in log.unmatched_columns %}
+              <span class="badge bg-danger me-1 mb-1">✗ {{ col }}</span>
+            {% endfor %}
+            {% if not log.matched_columns and not log.unmatched_columns %}
+              <span class="text-muted">{{ log.reason }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Reprocess -->
+{% if batch.status != 'processing' %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-arrow-repeat me-1"></i>Reprocess</div>
+  <div class="card-body">
+    <form method="post" action="{% url 'uploads:batch_reprocess' batch.pk %}">
+      {% csrf_token %}
+      {% for field in reprocess_form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div class="form-text">{{ field.help_text }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="bi bi-arrow-repeat me-1"></i>Reprocess
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Reprocess history -->
+{% if batch.reprocess_logs.exists %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-clock-history me-1"></i>Reprocess History</div>
+  <ul class="list-group list-group-flush">
+    {% for log in batch.reprocess_logs.all %}
+    <li class="list-group-item small">
+      <strong>{{ log.created_at|date:"d M Y H:i" }}</strong>
+      — {{ log.triggered_by.username|default:"System" }}
+      <br><span class="text-muted">{{ log.reason }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% endblock %}

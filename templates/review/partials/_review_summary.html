@@ -1,0 +1,38 @@
+<div id="review-summary" class="row g-2 mb-3"
+     hx-get="{% url 'review:review_batch' run.pk %}?summary_only=1"
+     hx-trigger="reviewSummaryChanged from:body"
+     hx-target="#review-summary"
+     hx-swap="outerHTML">
+  {% with s=run.review_summary %}
+  <div class="col-6 col-md">
+    <div class="card text-center py-2">
+      <div class="small text-muted">Total</div>
+      <strong>{{ s.total }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="card text-center py-2 border-success">
+      <div class="small text-success">Approved</div>
+      <strong class="text-success">{{ s.approved }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="card text-center py-2 border-danger">
+      <div class="small text-danger">Rejected</div>
+      <strong class="text-danger">{{ s.rejected }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="card text-center py-2">
+      <div class="small text-muted">Pending</div>
+      <strong>{{ s.pending }}</strong>
+    </div>
+  </div>
+  <div class="col-6 col-md">
+    <div class="card text-center py-2 {% if s.problem > 0 %}border-warning{% endif %}">
+      <div class="small {% if s.problem > 0 %}text-warning{% else %}text-muted{% endif %}">Problem</div>
+      <strong class="{% if s.problem > 0 %}text-warning{% endif %}">{{ s.problem }}</strong>
+    </div>
+  </div>
+  {% endwith %}
+</div>

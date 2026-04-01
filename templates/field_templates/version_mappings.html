@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Edit Mappings: {{ version }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Edit Mappings — {{ version }}</h4>
+  <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-sm btn-outline-secondary">Back</a>
+</div>
+<p class="text-muted small">
+  Map distributor file column headers to standard master fields.
+  The "Source Column" is the exact header name as it appears in the distributor file.
+  Aliases can be added separately via the Fields page.
+</p>
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {{ formset.management_form }}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle" id="mapping-table">
+          <thead class="table-light">
+            <tr>
+              <th>Standard Field</th>
+              <th>Source Column (in file)</th>
+              <th style="width:60px;">Delete</th>
+            </tr>
+          </thead>
+          <tbody id="mapping-formset">
+            {% for mapping_form in formset %}
+              <tr class="mapping-row">
+                <td>
+                  {{ mapping_form.id }}
+                  {{ mapping_form.standard_field }}
+                  {% if mapping_form.standard_field.errors %}
+                    <div class="text-danger small">{{ mapping_form.standard_field.errors|join:", " }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ mapping_form.source_column }}
+                  {% if mapping_form.source_column.errors %}
+                    <div class="text-danger small">{{ mapping_form.source_column.errors|join:", " }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-center">{{ mapping_form.DELETE }}</td>
+              </tr>
+              {% if mapping_form.non_field_errors %}
+              <tr>
+                <td colspan="3"><span class="text-danger small">{{ mapping_form.non_field_errors|join:", " }}</span></td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Template row (hidden, cloned by JS) -->
+      <table class="d-none">
+        <tbody id="mapping-row-template">
+          <tr class="mapping-row">
+            <td>
+              <input type="hidden" name="form-__prefix__-id" id="id_form-__prefix__-id">
+              <select name="form-__prefix__-standard_field" id="id_form-__prefix__-standard_field"
+                      class="form-select form-select-sm">
+                <option value="">---------</option>
+                {% for sf in standard_fields %}
+                  <option value="{{ sf.pk }}">{{ sf.display_name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input type="text" name="form-__prefix__-source_column" id="id_form-__prefix__-source_column"
+                     class="form-control form-control-sm" placeholder="e.g. Product Name">
+            </td>
+            <td class="text-center">
+              <input type="checkbox" name="form-__prefix__-DELETE" id="id_form-__prefix__-DELETE"
+                     class="form-check-input">
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Save Mappings</button>
+        <button type="button" class="btn btn-outline-secondary" id="add-mapping-row">
+          <i class="bi bi-plus-lg me-1"></i>Add Row
+        </button>
+        <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  document.getElementById('add-mapping-row').addEventListener('click', function () {
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    const idx = parseInt(totalForms.value);
+    const templateBody = document.getElementById('mapping-row-template');
+    const newRow = templateBody.querySelector('tr').cloneNode(true);
+
+    // Replace __prefix__ with current index
+    newRow.innerHTML = newRow.innerHTML.replaceAll('__prefix__', idx);
+
+    document.getElementById('mapping-formset').appendChild(newRow);
+    totalForms.value = idx + 1;
+  });
+})();
+</script>
+{% endblock %}

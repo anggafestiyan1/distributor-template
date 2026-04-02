@@ -29,8 +29,14 @@ class StandardMasterField(models.Model):
     )
     display_name = models.CharField(max_length=200)
     data_type = models.CharField(max_length=20, choices=DATA_TYPE_CHOICES, default="string")
-    is_required = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True, help_text="Show this field in reports, exports, and Master Data")
+    is_displayed = models.BooleanField(
+        default=True,
+        help_text="Show this field as a column in Master Data, exports, and reports",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Process this field (aliases, mapping, validation). Hidden fields are still processed if active.",
+    )
     batch_context_source = models.CharField(
         max_length=50,
         blank=True,

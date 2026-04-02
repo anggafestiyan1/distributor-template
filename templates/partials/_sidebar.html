@@ -30,6 +30,52 @@
         </a>
       </li>
 
+      <!-- Warehouse -->
+      <li class="nav-item mt-1">
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Warehouse</span>
+      </li>
+      {% if user.is_admin or user.is_superuser %}
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'product' in request.resolver_match.url_name and 'distributor' not in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:product_list' %}">
+          <i class="bi bi-box-seam"></i> Products
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'main_stock' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:main_stock_list' %}">
+          <i class="bi bi-boxes"></i> Main Stock
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'distributor_product' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:distributor_product_list' %}">
+          <i class="bi bi-link-45deg"></i> Product Assignments
+        </a>
+      </li>
+      {% endif %}
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'distributor_stock' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:distributor_stock_list' %}">
+          <i class="bi bi-shop"></i> Distributor Stock
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'movement' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:movement_list' %}">
+          <i class="bi bi-arrow-left-right"></i> Movements
+        </a>
+      </li>
+      {% if user.is_admin or user.is_superuser %}
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'config' in request.resolver_match.url_name %}active{% endif %}"
+           href="{% url 'warehouse:config' %}">
+          <i class="bi bi-gear"></i> Warehouse Config
+        </a>
+      </li>
+      {% endif %}
+
       {% if user.is_admin or user.is_superuser %}
       <li class="nav-item mt-1">
         <div class="sidebar-divider"></div>

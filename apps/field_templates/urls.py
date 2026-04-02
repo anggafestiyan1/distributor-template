@@ -11,7 +11,7 @@ urlpatterns = [
     path("<int:pk>/delete/", views.FieldDeleteView.as_view(), name="field_delete"),
     path("<int:pk>/aliases/", views.FieldAliasView.as_view(), name="field_aliases"),
     path("<int:pk>/toggle-active/", views.FieldToggleActiveView.as_view(), name="field_toggle_active"),
-    path("<int:pk>/toggle-required/", views.FieldToggleRequiredView.as_view(), name="field_toggle_required"),
+    path("<int:pk>/toggle-displayed/", views.FieldToggleDisplayedView.as_view(), name="field_toggle_displayed"),
     # Standard field template download
     path("template-download/", views.FieldTemplateDownloadView.as_view(), name="template_download"),
     # Templates

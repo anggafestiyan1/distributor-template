@@ -145,19 +145,11 @@ class ReviewBatchView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
         rows_qs = rows_qs.prefetch_related("validation_issues")
 
-        # Derive column definitions from the first row's mapped_data
-        sample = all_rows.first()
-        columns = []
-        if sample and sample.mapped_data:
-            data_keys = list(sample.mapped_data.keys())
-            field_display_map = {
-                sf.name: sf.display_name
-                for sf in StandardMasterField.objects.filter(name__in=data_keys)
-            }
-            columns = [
-                (k, field_display_map.get(k, k.replace("_", " ").title()))
-                for k in data_keys
-            ]
+        # Derive column definitions — only show displayed fields
+        displayed_fields = StandardMasterField.objects.filter(
+            is_active=True, is_displayed=True
+        ).order_by("order")
+        columns = [(sf.name, sf.display_name) for sf in displayed_fields]
 
         # Paginate
         paginator = Paginator(rows_qs, 100)
@@ -173,12 +165,17 @@ class ReviewBatchView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
 
 class ApproveRowView(LoginRequiredMixin, HtmxMixin, View):
-    """HTMX: approve a single import row, return updated row card partial."""
+    """HTMX: approve a single import row, reduce stock, return updated row partial."""
 
     def post(self, request, pk):
-        row = get_object_or_404(ImportRow, pk=pk)
+        row = get_object_or_404(ImportRow.objects.select_related("processing_run__batch__distributor"), pk=pk)
         note = request.POST.get("note", "")
         _apply_row_decision(row, "approved", note, request.user)
+
+        # Reduce stock on approve
+        from apps.warehouse.services.stock import reduce_stock_for_single_row
+        reduce_stock_for_single_row(row, request.user)
+
         return _row_response(request, row)
 
 
@@ -193,15 +190,32 @@ class RejectRowView(LoginRequiredMixin, HtmxMixin, View):
 
 
 class ApproveAllView(LoginRequiredMixin, StaffOrAdminMixin, View):
-    """Approve all pending rows in a ProcessingRun."""
+    """Approve all pending rows in a ProcessingRun and reduce stock."""
 
     def post(self, request, pk):
-        run = get_object_or_404(ProcessingRun, pk=pk)
+        run = get_object_or_404(ProcessingRun.objects.select_related("batch__distributor"), pk=pk)
         rows = list(run.import_rows.filter(review_decision=ImportRow.DECISION_PENDING))
         count = len(rows)
         for row in rows:
             _apply_row_decision(row, "approved", "Bulk approved", request.user)
-        messages.success(request, f"Approved {count} rows.")
+
+        # Bulk stock reduction
+        if rows:
+            from apps.warehouse.services.stock import reduce_stock_for_rows
+            stock_result = reduce_stock_for_rows(
+                distributor=run.batch.distributor,
+                rows=rows,
+                user=request.user,
+                reference=f"Bulk Approve (Run #{run.pk})",
+            )
+            msg = f"Approved {count} rows."
+            if not stock_result.get("skipped"):
+                msg += f" Stock reduced for {stock_result['matched']} product(s)."
+                if stock_result["unmatched"]:
+                    msg += f" {stock_result['unmatched']} unmatched."
+            messages.success(request, msg)
+        else:
+            messages.success(request, f"Approved {count} rows.")
         return redirect(reverse("review:review_batch", kwargs={"pk": pk}))
 
 
@@ -232,10 +246,18 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
         # Only promote approved rows — rejected are skipped
         approved_rows = run.import_rows.filter(review_decision=ImportRow.DECISION_APPROVED)
-        from apps.master_data.models import MasterDataRecord
+        from apps.master_data.models import MasterDataRecord, MasterDataImport
         from apps.field_templates.models import StandardMasterField
 
         standard_fields = list(StandardMasterField.objects.order_by("order", "name"))
+
+        # Create import group
+        master_import = MasterDataImport.objects.create(
+            code=MasterDataImport.generate_code(),
+            distributor=run.batch.distributor,
+            processing_run=run,
+            imported_by=request.user,
+        )
 
         created_count = 0
         for row in approved_rows:
@@ -243,6 +265,7 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
             _, created = MasterDataRecord.objects.get_or_create(
                 import_row=row,
                 defaults={
+                    "master_import": master_import,
                     "distributor": run.batch.distributor,
                     "area": run.batch.distributor.area.name,
                     "template_version": run.template_version,
@@ -254,11 +277,21 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
             if created:
                 created_count += 1
 
+        # Update record count
+        master_import.record_count = created_count
+        master_import.save(update_fields=["record_count"])
+
+        if created_count == 0:
+            master_import.delete()  # No records created, remove empty import
+
         total_approved = approved_rows.count()
-        skipped = total_approved - created_count  # already existed
+        skipped = total_approved - created_count
         msg = f"Finalized: {created_count} record(s) added to Master Data."
+        if created_count > 0:
+            msg += f" (Import ID: {master_import.code})"
         if skipped:
             msg += f" ({skipped} already existed and were skipped.)"
+
         messages.success(request, msg)
         return redirect(reverse("review:review_batch", kwargs={"pk": pk}))
 
@@ -268,15 +301,10 @@ def _row_response(request, row: ImportRow):
     from apps.field_templates.models import StandardMasterField
     row.refresh_from_db()
 
-    data_keys = list(row.mapped_data.keys())
-    field_display_map = {
-        sf.name: sf.display_name
-        for sf in StandardMasterField.objects.filter(name__in=data_keys)
-    }
-    columns = [
-        (k, field_display_map.get(k, k.replace("_", " ").title()))
-        for k in data_keys
-    ]
+    displayed_fields = StandardMasterField.objects.filter(
+        is_active=True, is_displayed=True
+    ).order_by("order")
+    columns = [(sf.name, sf.display_name) for sf in displayed_fields]
 
     response = render(
         request,

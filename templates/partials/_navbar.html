@@ -7,6 +7,17 @@
     <span class="navbar-toggler-icon"></span>
   </button>
   <div class="ms-auto px-3 d-flex align-items-center gap-2">
+    <!-- Low-stock notification bell -->
+    <a href="{% url 'warehouse:notifications' %}" class="position-relative text-white text-decoration-none"
+       title="Stock Alerts">
+      <i class="bi bi-bell{% if low_stock_count %}-fill{% endif %} fs-5"></i>
+      {% if low_stock_count %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size: 0.65rem;">
+          {{ low_stock_count }}
+        </span>
+      {% endif %}
+    </a>
     <span class="text-white-50 small d-none d-sm-inline">
       {{ user.get_full_name|default:user.username }}
       <span class="badge bg-secondary ms-1">{{ user.get_role_display }}</span>

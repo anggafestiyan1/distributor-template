@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Main Stock{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4><i class="bi bi-boxes me-2"></i>Main Warehouse Stock</h4>
+    <p class="page-subtitle">Central warehouse inventory levels</p>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center">
+      <div class="col-sm-6 col-md-4">
+        <input type="text" name="q" value="{{ request.GET.q }}"
+               class="form-control form-control-sm" placeholder="Search SKU or name...">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+        <a href="{% url 'warehouse:main_stock_list' %}" class="btn btn-sm btn-link text-muted">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>SKU</th>
+          <th>Product</th>
+          <th>Unit</th>
+          <th class="text-end">Quantity</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td><code>{{ p.sku }}</code></td>
+          <td class="fw-medium">{{ p.name }}</td>
+          <td>{{ p.unit }}</td>
+          <td class="text-end">
+            {% with qty=p.main_stock.quantity|default:0 %}
+              <span class="{% if qty <= 0 %}text-danger fw-bold{% endif %}">{{ qty }}</span>
+            {% endwith %}
+          </td>
+          <td>
+            <a href="{% url 'warehouse:main_stock_adjust' p.pk %}" class="btn btn-sm btn-outline-primary">Adjust</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5">
+            <div class="empty-state">
+              <i class="bi bi-boxes"></i>
+              <p class="empty-title">No products</p>
+              <p><a href="{% url 'warehouse:product_create' %}">Create products</a> first.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

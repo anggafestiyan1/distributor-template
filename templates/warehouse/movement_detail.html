@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Movement {{ batch.code }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4>
+      <i class="bi bi-arrow-left-right me-2"></i>
+      <code>{{ batch.code }}</code>
+      <span class="text-muted fs-6 ms-2">— {{ batch.distributor.name }}</span>
+    </h4>
+    <p class="page-subtitle">
+      {% if batch.movement_type == "IN" %}
+        <span class="badge bg-success">Stock In</span>
+      {% elif batch.movement_type == "OUT" %}
+        <span class="badge bg-danger">Stock Out</span>
+      {% else %}
+        <span class="badge bg-warning text-dark">Adjustment</span>
+      {% endif %}
+      Total: {{ batch.total_quantity }} —
+      {{ batch.created_by.username|default:"system" }} — {{ batch.created_at|date:"d M Y H:i" }}
+      {% if batch.reference %} — {{ batch.reference }}{% endif %}
+    </p>
+  </div>
+  <a href="{% url 'warehouse:movement_list' %}" class="btn btn-sm btn-outline-secondary flex-shrink-0">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:3rem">No</th>
+          <th>Product</th>
+          <th>SKU</th>
+          <th>Type</th>
+          <th class="text-end">Qty</th>
+          <th class="text-end">Before</th>
+          <th class="text-end">After</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in movements %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td class="fw-medium">{{ m.distributor_product.product.name }}</td>
+          <td><code>{{ m.distributor_product.product.sku }}</code></td>
+          <td>
+            {% if m.movement_type == "IN" %}
+              <span class="badge bg-success">IN</span>
+            {% elif m.movement_type == "OUT" %}
+              <span class="badge bg-danger">OUT</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">ADJ</span>
+            {% endif %}
+          </td>
+          <td class="text-end fw-medium">{{ m.quantity }}</td>
+          <td class="text-end text-muted">{{ m.quantity_before }}</td>
+          <td class="text-end fw-medium {% if m.quantity_after <= 0 %}text-danger{% endif %}">{{ m.quantity_after }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-muted text-center py-3">No movements in this batch.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Distributor Stock{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4><i class="bi bi-shop me-2"></i>Distributor Stock</h4>
+    <p class="page-subtitle">Inventory levels per distributor</p>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center">
+      <div class="col-sm-4 col-md-3">
+        <input type="text" name="q" value="{{ filter_q }}"
+               class="form-control form-control-sm" placeholder="Search product...">
+      </div>
+      <div class="col-sm-4 col-md-3">
+        <select name="distributor" class="form-select form-select-sm">
+          <option value="">All distributors</option>
+          {% for d in distributors %}
+            <option value="{{ d.pk }}" {% if filter_distributor == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+        <a href="{% url 'warehouse:distributor_stock_list' %}" class="btn btn-sm btn-link text-muted">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Distributor</th>
+          <th>Product</th>
+          <th>SKU (Master)</th>
+          <th>Alias SKU</th>
+          <th>Alias Name</th>
+          <th class="text-end">Quantity</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stocks %}
+        <tr>
+          <td>{{ s.distributor_product.distributor.name }}</td>
+          <td class="fw-medium">{{ s.distributor_product.product.name }}</td>
+          <td><code>{{ s.distributor_product.product.sku }}</code></td>
+          <td>{% if s.distributor_product.alias_sku %}<code>{{ s.distributor_product.alias_sku }}</code>{% else %}—{% endif %}</td>
+          <td>{{ s.distributor_product.alias_name|default:"—" }}</td>
+          <td class="text-end">
+            <span class="{% if s.quantity <= 0 %}text-danger fw-bold{% endif %}">{{ s.quantity }}</span>
+          </td>
+          <td>
+            {% if request.user.is_admin or request.user.is_superuser %}
+            <a href="{% url 'warehouse:distributor_stock_adjust' s.pk %}" class="btn btn-sm btn-outline-primary">Adjust</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7">
+            <div class="empty-state">
+              <i class="bi bi-shop"></i>
+              <p class="empty-title">No stock records</p>
+              <p>Assign products to distributors first.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Adjust Stock{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Adjust Stock — {{ product.name }}</h5>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-light border mb-3">
+          <div class="row">
+            <div class="col-6">
+              <small class="text-muted">Product</small>
+              <div class="fw-medium">{{ product.sku }} — {{ product.name }}</div>
+            </div>
+            {% if distributor %}
+            <div class="col-6">
+              <small class="text-muted">Distributor</small>
+              <div class="fw-medium">{{ distributor.name }}</div>
+            </div>
+            {% endif %}
+          </div>
+          <div class="mt-2">
+            <small class="text-muted">Current Stock</small>
+            <div class="fs-4 fw-bold {% if stock.quantity <= 0 %}text-danger{% else %}text-success{% endif %}">
+              {{ stock.quantity }} {{ product.unit }}
+            </div>
+          </div>
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+          {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="invalid-feedback d-block">{{ field.errors|join:", " }}</div>
+            {% endif %}
+            {% if field.help_text %}
+            <div class="form-text">{{ field.help_text }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Save</button>
+            {% if stock_type == "main" %}
+              <a href="{% url 'warehouse:main_stock_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            {% else %}
+              <a href="{% url 'warehouse:distributor_stock_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

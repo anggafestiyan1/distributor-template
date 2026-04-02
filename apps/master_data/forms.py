@@ -5,7 +5,7 @@ class ExportForm(forms.Form):
     FORMAT_CHOICES = [("csv", "CSV"), ("xlsx", "Excel (.xlsx)")]
 
     format = forms.ChoiceField(choices=FORMAT_CHOICES, initial="csv")
-    area = forms.CharField(required=False, label="Filter by area")
+    area = forms.ChoiceField(required=False, label="Area")
     distributor = forms.ModelChoiceField(
         queryset=None, required=False, empty_label="All distributors"
     )
@@ -14,5 +14,9 @@ class ExportForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from apps.distributors.models import Distributor
+        from apps.distributors.models import Area, Distributor
+        area_choices = [("", "All areas")] + [
+            (a.name, a.name) for a in Area.objects.filter(is_active=True).order_by("name")
+        ]
+        self.fields["area"].choices = area_choices
         self.fields["distributor"].queryset = Distributor.objects.filter(is_active=True).order_by("name")

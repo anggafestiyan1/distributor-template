@@ -3,7 +3,48 @@ from django.conf import settings
 from django.db import models
 
 
+class MasterDataImport(models.Model):
+    """Groups MasterDataRecords created in a single finalize action."""
+
+    code = models.CharField(max_length=20, unique=True, help_text="Auto-generated IID-XXXXX")
+    distributor = models.ForeignKey(
+        "distributors.Distributor",
+        on_delete=models.PROTECT,
+        related_name="master_imports",
+    )
+    processing_run = models.ForeignKey(
+        "uploads.ProcessingRun",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
+    record_count = models.PositiveIntegerField(default=0)
+    imported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-imported_at"]
+
+    def __str__(self):
+        return f"{self.code} — {self.distributor.name}"
+
+    @classmethod
+    def generate_code(cls):
+        last = cls.objects.order_by("-pk").first()
+        next_num = (last.pk + 1) if last else 1
+        return f"IID-{next_num:05d}"
+
+
 class MasterDataRecord(models.Model):
+    master_import = models.ForeignKey(
+        MasterDataImport,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name="records",
+    )
     distributor = models.ForeignKey(
         "distributors.Distributor",
         on_delete=models.PROTECT,

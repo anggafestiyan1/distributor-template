@@ -39,6 +39,7 @@ LOCAL_APPS = [
     "apps.uploads.apps.UploadsConfig",
     "apps.review.apps.ReviewConfig",
     "apps.master_data.apps.MasterDataConfig",
+    "apps.warehouse.apps.WarehouseConfig",
     "apps.dashboard.apps.DashboardConfig",
 ]
 
@@ -70,6 +71,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.warehouse.context_processors.low_stock_alerts",
             ],
         },
     },

@@ -128,21 +128,8 @@ def validate_row(
         value = mapped_data.get(sf.name, "")
         str_value = str(value).strip() if value is not None else ""
 
-        # Required field check
-        if sf.is_required and not str_value:
-            issues.append(
-                _issue(
-                    "row",
-                    "error",
-                    "ROW_REQUIRED_MISSING",
-                    f"Required field '{sf.display_name}' is empty.",
-                    sf.name,
-                )
-            )
-            continue
-
         if not str_value:
-            continue  # Optional field, empty is OK
+            continue  # Empty is OK — no required fields
 
         # Type validation
         type_issues = _validate_type(sf, str_value)
@@ -153,7 +140,7 @@ def validate_row(
 
 def _validate_type(sf, str_value: str) -> list[dict]:
     issues: list[dict] = []
-    severity = "error" if sf.is_required else "warning"
+    severity = "warning"
 
     if sf.data_type == "integer":
         try:

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load core_tags %}
+{% block title %}Import {{ master_import.code }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4>
+      <i class="bi bi-database me-2"></i>
+      <code>{{ master_import.code }}</code>
+      <span class="text-muted fs-6 ms-2">— {{ master_import.distributor.name }}</span>
+    </h4>
+    <p class="page-subtitle">
+      {{ master_import.record_count }} record(s) imported on {{ master_import.imported_at|date:"d M Y H:i" }}
+      by {{ master_import.imported_by.username|default:"system" }}
+    </p>
+  </div>
+  <a href="{% url 'master_data:record_list' %}" class="btn btn-sm btn-outline-secondary flex-shrink-0">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:3rem">#</th>
+          {% for sf in standard_fields %}
+          <th>{{ sf.display_name }}</th>
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td class="text-muted small">{{ forloop.counter }}</td>
+          {% for sf in standard_fields %}
+          <td>{{ record.data|get_item:sf.name|default:"—" }}</td>
+          {% endfor %}
+          <td>
+            <a href="{% url 'master_data:record_detail' record.pk %}" class="btn btn-sm btn-outline-secondary">Detail</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="20" class="text-muted text-center py-3">No records.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

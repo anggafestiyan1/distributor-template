@@ -18,7 +18,7 @@
           <th>Code</th>
           <th>Display Name</th>
           <th>Type</th>
-          <th>Required</th>
+          <th>Display</th>
           <th>Active</th>
           <th>Aliases</th>
           <th></th>
@@ -39,14 +39,18 @@
             {% endif %}
           </td>
 
-          <!-- Required toggle -->
+          <!-- Display toggle -->
           <td>
-            <form method="post" action="{% url 'field_templates:field_toggle_required' f.pk %}" class="d-inline">
+            <form method="post" action="{% url 'field_templates:field_toggle_displayed' f.pk %}" class="d-inline">
               {% csrf_token %}
               <button type="submit"
-                      class="btn btn-sm {% if f.is_required %}btn-danger{% else %}btn-outline-secondary{% endif %}"
-                      title="{% if f.is_required %}Click to make optional{% else %}Click to make required{% endif %}">
-                {% if f.is_required %}Required{% else %}Optional{% endif %}
+                      class="btn btn-sm {% if f.is_displayed %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                      title="{% if f.is_displayed %}Column shown in Master Data{% else %}Column hidden from Master Data{% endif %}">
+                {% if f.is_displayed %}
+                  <i class="bi bi-eye me-1"></i>Show
+                {% else %}
+                  <i class="bi bi-eye-slash me-1"></i>Hide
+                {% endif %}
               </button>
             </form>
           </td>
@@ -57,7 +61,7 @@
               {% csrf_token %}
               <button type="submit"
                       class="btn btn-sm {% if f.is_active %}btn-success{% else %}btn-outline-secondary{% endif %}"
-                      title="{% if f.is_active %}Click to hide from reports{% else %}Click to show in reports{% endif %}">
+                      title="{% if f.is_active %}Field is processed (aliases, mapping){% else %}Field is inactive{% endif %}">
                 {% if f.is_active %}
                   <i class="bi bi-toggle-on me-1"></i>On
                 {% else %}
@@ -129,17 +133,19 @@
         <thead>
           <tr>
             {% for f in fields %}
+            {% if f.is_displayed %}
             <th>
               {{ f.display_name }}
               <span class="col-type">{{ f.get_data_type_display }}</span>
-              {% if f.is_required %}<span class="col-required">* required</span>{% endif %}
             </th>
+            {% endif %}
             {% endfor %}
           </tr>
         </thead>
         <tbody>
           <tr>
             {% for f in fields %}
+            {% if f.is_displayed %}
             <td class="text-muted small px-3 py-2" style="border-right:1px solid #e9ecef;">
               {% if f.data_type == 'string' %}example text
               {% elif f.data_type == 'integer' %}1234
@@ -149,6 +155,7 @@
               {% else %}—
               {% endif %}
             </td>
+            {% endif %}
             {% endfor %}
           </tr>
         </tbody>

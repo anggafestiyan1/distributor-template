@@ -14,8 +14,8 @@ class FieldAliasInline(admin.TabularInline):
 
 @admin.register(StandardMasterField)
 class StandardMasterFieldAdmin(admin.ModelAdmin):
-    list_display = ["name", "display_name", "data_type", "is_required", "order"]
-    list_filter = ["data_type", "is_required"]
+    list_display = ["name", "display_name", "data_type", "is_displayed", "is_active", "order"]
+    list_filter = ["data_type", "is_displayed", "is_active"]
     search_fields = ["name", "display_name"]
     inlines = [FieldAliasInline]
     ordering = ["order", "name"]

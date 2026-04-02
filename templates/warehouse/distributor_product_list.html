@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Distributor Products{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h4><i class="bi bi-link-45deg me-2"></i>Distributor Products</h4>
+    <p class="page-subtitle">Product assignments with alias SKU/name per distributor</p>
+  </div>
+  <a href="{% url 'warehouse:distributor_product_create' %}" class="btn btn-sm btn-primary flex-shrink-0">
+    <i class="bi bi-plus-lg me-1"></i>Assign Product
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center">
+      <div class="col-sm-4 col-md-3">
+        <input type="text" name="q" value="{{ filter_q }}"
+               class="form-control form-control-sm" placeholder="Search alias/product...">
+      </div>
+      <div class="col-sm-4 col-md-3">
+        <select name="distributor" class="form-select form-select-sm">
+          <option value="">All distributors</option>
+          {% for d in distributors %}
+            <option value="{{ d.pk }}" {% if filter_distributor == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+        <a href="{% url 'warehouse:distributor_product_list' %}" class="btn btn-sm btn-link text-muted">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Distributor</th>
+          <th>Product (Master)</th>
+          <th>SKU (Master)</th>
+          <th>Alias SKU</th>
+          <th>Alias Name</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.distributor.name }}</td>
+          <td class="fw-medium">{{ item.product.name }}</td>
+          <td><code>{{ item.product.sku }}</code></td>
+          <td>{% if item.alias_sku %}<code>{{ item.alias_sku }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{{ item.alias_name|default:"—" }}</td>
+          <td>
+            {% if item.is_active %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{% url 'warehouse:distributor_product_edit' item.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <form method="post" action="{% url 'warehouse:distributor_product_delete' item.pk %}"
+                    onsubmit="return confirm('Remove this product assignment?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7">
+            <div class="empty-state">
+              <i class="bi bi-link-45deg"></i>
+              <p class="empty-title">No products assigned</p>
+              <p><a href="{% url 'warehouse:distributor_product_create' %}">Assign a product</a> to a distributor.</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

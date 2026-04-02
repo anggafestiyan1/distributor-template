@@ -11,7 +11,7 @@ from .models import (
 class StandardMasterFieldForm(forms.ModelForm):
     class Meta:
         model = StandardMasterField
-        fields = ["name", "display_name", "data_type", "is_required", "batch_context_source", "order", "description"]
+        fields = ["name", "display_name", "data_type", "is_displayed", "batch_context_source", "order", "description"]
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 

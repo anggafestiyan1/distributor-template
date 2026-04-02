@@ -23,11 +23,9 @@ class MatchResult:
     version_number: int
     is_assigned: bool
     matched_count: int
-    total_required: int
     total_fields: int
-    score: float  # matched_required / total_required (0.0–1.0)
+    score: float  # matched / total_fields (0.0–1.0)
     matched_columns: list[str] = field(default_factory=list)
-    missing_required: list[str] = field(default_factory=list)
     unmatched_columns: list[str] = field(default_factory=list)
     reason: str = ""
 
@@ -69,7 +67,6 @@ def score_template_version(
             version_number=template_version.version_number,
             is_assigned=template_version.template.scope == "assigned",
             matched_count=0,
-            total_required=0,
             total_fields=0,
             score=0.0,
             reason="Template version has no field mappings",
@@ -77,21 +74,16 @@ def score_template_version(
 
     headers_set = set(normalized_headers)
     matched: list[str] = []
-    missing_required: list[str] = []
     unmatched: list[str] = []
-    total_required = 0
 
     for mapping in mappings:
         sf = mapping.standard_field
-        if sf.is_required:
-            total_required += 1
 
         # Check direct match
         is_matched = mapping.source_column_normalized in headers_set
 
         # Check alias match
         if not is_matched:
-            # Find all aliases for this standard field
             field_id = sf.pk
             is_matched = any(
                 alias_norm for alias_norm, fid in alias_lookup.items()
@@ -102,20 +94,11 @@ def score_template_version(
             matched.append(sf.name)
         else:
             unmatched.append(sf.name)
-            if sf.is_required:
-                missing_required.append(sf.name)
 
     total_fields = len(mappings)
-    matched_required = total_required - len(missing_required)
+    score = len(matched) / total_fields if total_fields > 0 else 0.0
 
-    if total_required > 0:
-        score = matched_required / total_required
-    elif total_fields > 0:
-        score = len(matched) / total_fields
-    else:
-        score = 0.0
-
-    reason = _build_reason(score, missing_required, matched, total_required)
+    reason = _build_reason(score, [], matched, total_fields)
 
     return MatchResult(
         template_version_id=template_version.pk,
@@ -123,21 +106,17 @@ def score_template_version(
         version_number=template_version.version_number,
         is_assigned=template_version.template.scope == "assigned",
         matched_count=len(matched),
-        total_required=total_required,
         total_fields=total_fields,
         score=score,
         matched_columns=matched,
-        missing_required=missing_required,
         unmatched_columns=unmatched,
         reason=reason,
     )
 
 
-def _build_reason(score: float, missing: list, matched: list, total_required: int) -> str:
+def _build_reason(score: float, missing: list, matched: list, total_fields: int) -> str:
     if score >= 1.0:
-        return f"All {total_required} required fields matched"
-    if missing:
-        return f"Missing required fields: {', '.join(missing)}"
+        return f"All {total_fields} fields matched"
     return f"Matched {len(matched)} fields (score={score:.2f})"
 
 

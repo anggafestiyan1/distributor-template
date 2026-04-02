@@ -73,11 +73,11 @@ class FieldToggleActiveView(LoginRequiredMixin, StaffOrAdminMixin, View):
         return redirect(reverse("field_templates:field_list"))
 
 
-class FieldToggleRequiredView(LoginRequiredMixin, StaffOrAdminMixin, View):
+class FieldToggleDisplayedView(LoginRequiredMixin, StaffOrAdminMixin, View):
     def post(self, request, pk):
         field = get_object_or_404(StandardMasterField, pk=pk)
-        field.is_required = not field.is_required
-        field.save(update_fields=["is_required"])
+        field.is_displayed = not field.is_displayed
+        field.save(update_fields=["is_displayed"])
         return redirect(reverse("field_templates:field_list"))
 
 

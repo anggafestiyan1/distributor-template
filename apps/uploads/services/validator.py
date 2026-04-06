@@ -293,4 +293,5 @@ def compute_business_key(mapped_data: dict, distributor_code: str) -> str:
     if len(parts) <= 1:
         # Fallback: use all non-empty values sorted
         parts += sorted(str(v).strip() for v in mapped_data.values() if str(v).strip())
-    return "|".join(parts)
+    key = "|".join(parts)
+    return key[:255]  # Truncate to fit DB field

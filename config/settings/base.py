@@ -127,7 +127,7 @@ CELERY_TASK_TRACK_STARTED = True
 # ── Upload settings ───────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
-ALLOWED_UPLOAD_EXTENSIONS = [".xlsx", ".csv"]
+ALLOWED_UPLOAD_EXTENSIONS = [".xlsx", ".csv", ".pdf"]
 
 # ── Template matching ─────────────────────────────────────────────────────────
 TEMPLATE_MATCH_MIN_SCORE = 0.5  # 50 % required fields must match

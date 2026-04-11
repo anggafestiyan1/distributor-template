@@ -14,10 +14,10 @@ from .forms import (
     StockAdjustForm,
     WarehouseConfigForm,
 )
+from apps.distributors.models import Distributor
 from .models import (
     DistributorProduct,
     DistributorStock,
-    MainStock,
     MovementBatch,
     Product,
     StockMovement,
@@ -75,58 +75,6 @@ class ProductDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
         return redirect("warehouse:product_list")
 
 
-# ── Main Stock ──────────────────────────────────────────────────────────────
-
-
-class MainStockListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
-    model = Product
-    template_name = "warehouse/main_stock_list.html"
-    context_object_name = "products"
-    paginate_by = 50
-
-    def get_queryset(self):
-        qs = Product.objects.select_related("main_stock").filter(is_active=True)
-        q = self.request.GET.get("q", "").strip()
-        if q:
-            qs = qs.filter(sku__icontains=q) | qs.filter(name__icontains=q)
-        return qs.order_by("name")
-
-
-class MainStockAdjustView(LoginRequiredMixin, AdminRequiredMixin, View):
-    template_name = "warehouse/stock_adjust.html"
-
-    def get(self, request, pk):
-        product = get_object_or_404(Product, pk=pk)
-        stock, _ = MainStock.objects.get_or_create(product=product)
-        form = StockAdjustForm()
-        return render(request, self.template_name, {
-            "form": form, "product": product, "stock": stock, "stock_type": "main",
-        })
-
-    def post(self, request, pk):
-        product = get_object_or_404(Product, pk=pk)
-        stock, _ = MainStock.objects.get_or_create(product=product)
-        form = StockAdjustForm(request.POST)
-        if not form.is_valid():
-            return render(request, self.template_name, {
-                "form": form, "product": product, "stock": stock, "stock_type": "main",
-            })
-
-        movement_type = form.cleaned_data["movement_type"]
-        qty = form.cleaned_data["quantity"]
-        note = form.cleaned_data.get("note", "")
-        before = stock.quantity
-
-        if movement_type == StockMovement.TYPE_IN:
-            stock.quantity += qty
-        else:  # ADJUST
-            stock.quantity = qty
-
-        stock.save()
-        messages.success(request, f"Main stock updated: {before} → {stock.quantity}")
-        return redirect("warehouse:main_stock_list")
-
-
 # ── Distributor Product CRUD ────────────────────────────────────────────────
 
 
@@ -148,7 +96,7 @@ class DistributorProductListView(LoginRequiredMixin, AdminRequiredMixin, ListVie
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from apps.distributors.models import Distributor
+
         ctx["distributors"] = Distributor.objects.filter(is_active=True).order_by("name")
         ctx["filter_distributor"] = self.request.GET.get("distributor", "")
         ctx["filter_q"] = self.request.GET.get("q", "")
@@ -163,9 +111,16 @@ class DistributorProductCreateView(LoginRequiredMixin, AdminRequiredMixin, Creat
 
     def form_valid(self, form):
         resp = super().form_valid(form)
-        # Auto-create stock record
-        DistributorStock.objects.get_or_create(distributor_product=self.object)
-        messages.success(self.request, "Product assigned to distributor.")
+        # Auto-create stock record with initial quantity
+        initial_qty = form.cleaned_data.get("initial_quantity", 0) or 0
+        stock, _ = DistributorStock.objects.get_or_create(
+            distributor_product=self.object,
+            defaults={"quantity": initial_qty},
+        )
+        if stock.quantity != initial_qty:
+            stock.quantity = initial_qty
+            stock.save(update_fields=["quantity"])
+        messages.success(self.request, f"Product assigned to distributor. Initial stock: {initial_qty}")
         return resp
 
 
@@ -220,7 +175,7 @@ class DistributorStockListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
-        from apps.distributors.models import Distributor
+
         if user.is_admin or user.is_superuser:
             ctx["distributors"] = Distributor.objects.filter(is_active=True).order_by("name")
         else:
@@ -247,6 +202,8 @@ class DistributorStockAdjustView(LoginRequiredMixin, AdminRequiredMixin, View):
         })
 
     def post(self, request, pk):
+        from django.db import transaction
+
         ds = get_object_or_404(DistributorStock.objects.select_related(
             "distributor_product__product", "distributor_product__distributor",
         ), pk=pk)
@@ -263,34 +220,36 @@ class DistributorStockAdjustView(LoginRequiredMixin, AdminRequiredMixin, View):
         movement_type = form.cleaned_data["movement_type"]
         qty = form.cleaned_data["quantity"]
         note = form.cleaned_data.get("note", "")
-        before = ds.quantity
 
-        if movement_type == StockMovement.TYPE_IN:
-            ds.quantity += qty
-        else:  # ADJUST
-            ds.quantity = qty
+        with transaction.atomic():
+            ds = DistributorStock.objects.select_for_update().get(pk=pk)
+            before = ds.quantity
 
-        ds.save()
+            if movement_type == StockMovement.TYPE_IN:
+                ds.quantity += qty
+            else:  # ADJUST
+                ds.quantity = qty
 
-        from apps.warehouse.models import MovementBatch
-        mb = MovementBatch.objects.create(
-            code=MovementBatch.generate_code(),
-            distributor=ds.distributor_product.distributor,
-            movement_type=movement_type,
-            total_quantity=qty,
-            reference=f"Manual adjust — {ds.distributor_product.product.name}",
-            created_by=request.user,
-        )
-        StockMovement.objects.create(
-            movement_batch=mb,
-            distributor_product=ds.distributor_product,
-            movement_type=movement_type,
-            quantity=qty,
-            quantity_before=before,
-            quantity_after=ds.quantity,
-            note=note,
-            created_by=request.user,
-        )
+            ds.save()
+
+            mb = MovementBatch.objects.create(
+                code=MovementBatch.generate_code(),
+                distributor=ds.distributor_product.distributor,
+                movement_type=movement_type,
+                total_quantity=qty,
+                reference=f"Manual adjust — {ds.distributor_product.product.name}",
+                created_by=request.user,
+            )
+            StockMovement.objects.create(
+                movement_batch=mb,
+                distributor_product=ds.distributor_product,
+                movement_type=movement_type,
+                quantity=qty,
+                quantity_before=before,
+                quantity_after=ds.quantity,
+                note=note,
+                created_by=request.user,
+            )
 
         messages.success(request, f"Stock updated: {before} → {ds.quantity}")
         return redirect("warehouse:distributor_stock_list")
@@ -323,7 +282,7 @@ class MovementBatchListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
-        from apps.distributors.models import Distributor
+
         if user.is_admin or user.is_superuser:
             ctx["distributors"] = Distributor.objects.filter(is_active=True).order_by("name")
         else:

@@ -1,13 +1,10 @@
-"""Stock reduction service — called on row approve."""
+"""Stock service — product checks on approve, stock deduction on finalize."""
 from __future__ import annotations
 
-import logging
-from collections import defaultdict
+import re
 
 from django.db import transaction
 from django.db.models import Q
-
-logger = logging.getLogger(__name__)
 
 
 def match_distributor_product(distributor, product_value: str):
@@ -36,20 +33,77 @@ def match_distributor_product(distributor, product_value: str):
 
 
 def _parse_qty(mapped, qty_field):
-    """Parse quantity from mapped data. Returns int or None."""
+    """Parse quantity from mapped data. Returns int or None.
+
+    Handles formats like: "12", "12.00", "12 PCS", "12.00 PCS", "1,000"
+    """
     if not qty_field:
         return 1
     qty_raw = str(mapped.get(qty_field, "")).strip()
+    if not qty_raw:
+        return 1
+    # Extract leading number, ignore trailing text (e.g. "12 PCS" → "12")
+    m = re.match(r'^([\d.,]+)', qty_raw)
+    if not m:
+        return None
     try:
-        cleaned = qty_raw.replace(",", "")
+        cleaned = m.group(1).replace(",", "")
         return int(float(cleaned)) if cleaned else 1
     except (ValueError, AttributeError):
         return None
 
 
-def reduce_stock_for_rows(distributor, rows: list, user, reference: str) -> dict:
-    """Reduce distributor stock for approved rows, aggregated by product.
+# ── Product check on Approve ────────────────────────────────────────────────
 
+
+def check_product_exists(row, distributor) -> dict | None:
+    """Check if the product in this row exists in the distributor's warehouse.
+
+    Returns None if warehouse config not set (skip check).
+    Returns {"found": True, "product": dp} if found.
+    Returns {"found": False, "value": "..."} if NOT found → should be marked as problem.
+    """
+    from apps.warehouse.models import WarehouseFieldConfig
+
+    config = WarehouseFieldConfig.load()
+    if not config:
+        return None  # No warehouse config → skip check
+
+    mapped = row.mapped_data or {}
+    product_value = str(mapped.get(config.product_identifier_field, "")).strip()
+
+    if not product_value:
+        return None  # No product field in data → skip
+
+    dp = match_distributor_product(distributor, product_value)
+    if dp:
+        return {"found": True, "product": dp}
+    return {"found": False, "value": product_value}
+
+
+def check_products_for_rows(rows: list, distributor) -> dict:
+    """Check products for multiple rows. Returns {row_pk: check_result}."""
+    from apps.warehouse.models import WarehouseFieldConfig
+
+    config = WarehouseFieldConfig.load()
+    if not config:
+        return {}
+
+    results = {}
+    for row in rows:
+        result = check_product_exists(row, distributor)
+        if result:
+            results[row.pk] = result
+    return results
+
+
+# ── Stock deduction on Finalize ─────────────────────────────────────────────
+
+
+def reduce_stock_for_rows(distributor, rows: list, user, reference: str) -> dict:
+    """Reduce distributor stock for finalized rows, aggregated by product.
+
+    Called from FinalizeView AFTER rows are promoted to MasterData.
     Same product across multiple rows → single StockMovement with summed qty.
     """
     from apps.warehouse.models import (
@@ -68,7 +122,7 @@ def reduce_stock_for_rows(distributor, rows: list, user, reference: str) -> dict
     results = {"matched": 0, "unmatched": 0, "errors": [], "skipped": False}
 
     # Aggregate qty per DistributorProduct
-    dp_qty_map: dict[int, tuple] = {}  # dp.pk → (dp, total_qty)
+    dp_qty_map: dict[int, tuple] = {}
 
     for row in rows:
         mapped = row.mapped_data if hasattr(row, "mapped_data") else {}
@@ -138,34 +192,7 @@ def reduce_stock_for_rows(distributor, rows: list, user, reference: str) -> dict
     return results
 
 
-def reduce_stock_for_single_row(row, user) -> dict | None:
-    """Reduce stock for a single approved row. Creates one MovementBatch."""
-    from apps.warehouse.models import WarehouseFieldConfig
-
-    config = WarehouseFieldConfig.load()
-    if not config:
-        return None
-
-    mapped = row.mapped_data or {}
-    product_value = str(mapped.get(config.product_identifier_field, "")).strip()
-
-    if not product_value:
-        return {"status": "no_product"}
-
-    qty = _parse_qty(mapped, config.quantity_field)
-    if qty is None:
-        return {"status": "bad_qty"}
-    if qty <= 0:
-        return {"status": "zero_qty"}
-
-    distributor = row.processing_run.batch.distributor
-    reference = f"Row #{row.row_number} (Run #{row.processing_run_id})"
-
-    # Delegate to reduce_stock_for_rows with a single-item list
-    result = reduce_stock_for_rows(distributor, [row], user, reference)
-    if result.get("matched", 0) > 0:
-        return {"status": "ok"}
-    return {"status": "no_match", "value": product_value}
+# ── Notifications — Main Stock threshold ────────────────────────────────────
 
 
 def get_low_stock_alerts(user=None):

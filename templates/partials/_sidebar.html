@@ -43,12 +43,6 @@
         </a>
       </li>
       <li class="nav-item sidebar-subitem">
-        <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'main_stock' in request.resolver_match.url_name %}active{% endif %}"
-           href="{% url 'warehouse:main_stock_list' %}">
-          <i class="bi bi-boxes"></i> Main Stock
-        </a>
-      </li>
-      <li class="nav-item sidebar-subitem">
         <a class="nav-link {% if request.resolver_match.namespace == 'warehouse' and 'distributor_product' in request.resolver_match.url_name %}active{% endif %}"
            href="{% url 'warehouse:distributor_product_list' %}">
           <i class="bi bi-link-45deg"></i> Product Assignments

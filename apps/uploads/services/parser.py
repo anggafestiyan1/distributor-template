@@ -20,6 +20,7 @@ class ParseResult:
     row_count: int
     parse_errors: list[str] = field(default_factory=list)
     encoding_used: str = "utf-8"
+    metadata: dict = field(default_factory=dict)  # e.g. {"invoice_id": "INV-001"}
 
 
 def compute_file_checksum(file_path: str) -> str:
@@ -106,6 +107,67 @@ def _dataframe_to_result(df: pd.DataFrame) -> ParseResult:
 
 
 # ── PDF parsing ─────────────────────────────────────────────────────────────
+
+
+# Patterns to extract invoice ID from PDF header text
+_INVOICE_ID_PATTERNS = [
+    re.compile(r'Invoice\s*Id\s*[:\-]\s*(.+)', re.IGNORECASE),
+    re.compile(r'Nomor\s*Faktur\s*[:\-]?\s*(.+)', re.IGNORECASE),
+    re.compile(r'No\.?\s*Faktur\s*[:\-]?\s*(.+)', re.IGNORECASE),
+    re.compile(r'Invoice\s*(?:No|Number)\s*[:\-]\s*(.+)', re.IGNORECASE),
+]
+
+
+def _extract_pdf_metadata(pdf) -> dict:
+    """Extract metadata (invoice ID, date, etc.) from PDF header area.
+
+    Scans the first page's text lines BEFORE the table header for known patterns.
+    """
+    metadata = {}
+    page = pdf.pages[0]
+    text = page.extract_text()
+    if not text:
+        return metadata
+
+    lines = text.split("\n")
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Stop scanning if we hit the table header
+        tokens = re.split(r'[\s./_%]+', stripped.lower())
+        kw_count = sum(1 for t in tokens if t in _TABLE_HEADER_KEYWORDS)
+        if kw_count >= 3:
+            break
+
+        # Try invoice ID patterns
+        if "invoice_id" not in metadata:
+            for pattern in _INVOICE_ID_PATTERNS:
+                m = pattern.search(stripped)
+                if m:
+                    val = m.group(1).strip()
+                    val = re.split(r'\s{2,}', val)[0].strip()
+                    if val and len(val) < 100:
+                        metadata["invoice_id"] = val
+                        break
+
+    # Fallback: if "Nomor Faktur" was in header but value is on next line
+    # (e.g., Line 0: "...Nomor Faktur", Line 1: "16 Feb 2026 FJ2026-020583")
+    if "invoice_id" not in metadata:
+        for i, line in enumerate(lines):
+            if re.search(r'Nomor\s*Faktur|Invoice\s*Id', line, re.IGNORECASE):
+                # Check next line for an ID-like value (contains letters + numbers)
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    # Look for pattern like FJ2026-020583 (alphanumeric with dash)
+                    id_match = re.search(r'([A-Z]{1,5}[\d-]{5,}[\d]+)', next_line)
+                    if id_match:
+                        metadata["invoice_id"] = id_match.group(1)
+                break
+
+    return metadata
 
 
 # Known column header keywords for invoice/product tables
@@ -217,6 +279,27 @@ def _clean_table_result(headers: list[str], all_rows: list[dict]) -> tuple[list[
         headers = [h for h in headers if h.strip()]
         all_rows = [{k: v for k, v in row.items() if k.strip()} for row in all_rows]
 
+    # Clean up numeric values with trailing unit text:
+    #   "12.00 PCS" → "12"
+    #   "12.00"     → "12"
+    #   "48,500.00" → "48,500.00" (keep prices as-is, they have commas)
+    _UNIT_SUFFIXES = re.compile(
+        r'\s+(PCS|PC|BOX|KG|SET|BTL|UNIT|PACK|DUS|LSN|LBR|CTN)\b',
+        re.IGNORECASE,
+    )
+    for row in all_rows:
+        for h, v in row.items():
+            if not v:
+                continue
+            val = v.strip()
+            # Strip unit suffix: "12.00 PCS" → "12.00"
+            val = _UNIT_SUFFIXES.sub("", val).strip()
+            # Strip trailing .00: "12.00" → "12"
+            m = re.match(r'^(\d+)\.0+$', val)
+            if m:
+                val = m.group(1)
+            row[h] = val
+
     return headers, all_rows
 
 
@@ -308,27 +391,45 @@ def _split_merged_cells(headers: list[str], raw_rows: list[list[str]]) -> list[d
                     # Smart grouping: find which text lines start a NEW entry
                     # vs which are continuations of the previous entry.
                     #
-                    # Heuristic: a line starts a new entry if it begins with
-                    # an uppercase letter/word (like "SCL.", "PRODUCT", etc.)
-                    # AND the previous entry has at least 1 line already.
+                    # Strategy: detect the common prefix pattern from the first
+                    # few entries (e.g., "SCL." or "PRODUCT"). Lines starting
+                    # with this prefix are new entries; others are continuations.
                     #
                     # We need exactly `num_rows` groups.
-                    entry_starts: list[int] = [0]  # first line always starts entry 1
+
+                    # Detect common prefix from non-empty lines
+                    non_empty_lines = [l.strip() for l in text_lines if l.strip()]
+                    common_prefix = ""
+                    if len(non_empty_lines) >= 2:
+                        # Find longest common prefix among lines that look like
+                        # product entries (longer lines, not fragments)
+                        long_lines = [l for l in non_empty_lines if len(l) > 20]
+                        if len(long_lines) >= 2:
+                            prefix = long_lines[0]
+                            for ll in long_lines[1:]:
+                                while prefix and not ll.startswith(prefix):
+                                    prefix = prefix[:-1]
+                            common_prefix = prefix.strip()
+                            # Use at least 3 chars of prefix
+                            if len(common_prefix) < 3:
+                                common_prefix = ""
+
+                    entry_starts: list[int] = [0]
                     for li in range(1, total_lines):
                         line = text_lines[li].strip()
-                        prev_line = text_lines[li - 1].strip()
                         if not line:
                             continue
-                        # A continuation line is typically a leftover fragment
-                        # (short, doesn't start with the same prefix pattern).
-                        # A new entry line looks like a full product name start.
-                        # Heuristic: if the line starts with an uppercase letter
-                        # AND has length > 15 chars, it's likely a new entry.
-                        is_new = (
-                            len(line) > 15
-                            and line[0].isupper()
-                            and len(entry_starts) < num_rows
-                        )
+                        if len(entry_starts) >= num_rows:
+                            break
+
+                        is_new = False
+                        if common_prefix:
+                            # Line starts with the common prefix → new entry
+                            is_new = line.startswith(common_prefix)
+                        else:
+                            # Fallback: line > 25 chars + starts uppercase
+                            is_new = len(line) > 25 and line[0].isupper()
+
                         if is_new:
                             entry_starts.append(li)
 
@@ -407,164 +508,250 @@ def _split_merged_cells(headers: list[str], raw_rows: list[list[str]]) -> list[d
     return result_rows
 
 
-def _parse_pdf_tables(pdf) -> tuple[list[str], list[dict]]:
-    """Extract tables from PDF using multiple strategies.
-
-    Tries "lines" first (best for bordered invoice tables),
-    then "mixed", then "text" (borderless) as fallback.
-    Handles merged cells (multiple rows joined by \\n in a single cell).
-    """
+def _extract_page_tables(page, headers: list[str]) -> tuple[list[str], list[dict]]:
+    """Extract tables from a single PDF page, trying multiple strategies per page."""
     strategies = [
-        {
-            "vertical_strategy": "lines",
-            "horizontal_strategy": "lines",
-        },
-        {
-            "vertical_strategy": "text",
-            "horizontal_strategy": "lines",
-        },
-        {
-            "vertical_strategy": "text",
-            "horizontal_strategy": "text",
-            "snap_x_tolerance": 5,
-            "snap_y_tolerance": 5,
-        },
+        {"vertical_strategy": "lines", "horizontal_strategy": "lines"},
+        {"vertical_strategy": "lines", "horizontal_strategy": "text"},
+        {"vertical_strategy": "text", "horizontal_strategy": "text",
+         "snap_x_tolerance": 5, "snap_y_tolerance": 5},
     ]
 
     for settings in strategies:
-        headers: list[str] = []
-        all_rows: list[dict] = []
+        tables = page.extract_tables(table_settings=settings)
+        page_rows: list[dict] = []
+        page_headers = list(headers)  # copy
 
-        for page in pdf.pages:
-            tables = page.extract_tables(table_settings=settings)
-            for table in tables:
-                if not table:
-                    continue
+        for table in tables:
+            if not table:
+                continue
 
-                # First row = headers (only from first table found)
-                start_idx = 0
-                if not headers:
-                    for i, row in enumerate(table):
-                        cleaned = [str(c).strip() if c else "" for c in row]
-                        if any(cleaned):
-                            headers = cleaned
-                            start_idx = i + 1
-                            break
+            start_idx = 0
+            if not page_headers:
+                for i, row in enumerate(table):
+                    cleaned = [str(c).strip() if c else "" for c in row]
+                    if any(cleaned):
+                        page_headers = cleaned
+                        start_idx = i + 1
+                        break
 
-                # Remaining rows — handle merged cells
-                raw_rows = table[start_idx:]
-                if raw_rows:
-                    # Skip rows that repeat the header
-                    filtered = []
-                    for row in raw_rows:
-                        cleaned = [str(c).strip() if c else "" for c in row]
-                        if not _is_header_repeat(cleaned, headers):
-                            filtered.append(row)
-                    rows = _split_merged_cells(headers, filtered)
-                    all_rows.extend(rows)
+            raw_rows = table[start_idx:]
+            if raw_rows:
+                filtered = []
+                for row in raw_rows:
+                    cleaned = [str(c).strip() if c else "" for c in row]
+                    # Skip header repeats and empty rows
+                    if page_headers and _is_header_repeat(cleaned, page_headers):
+                        continue
+                    if not any(cleaned):
+                        continue
+                    filtered.append(row)
+                if filtered:
+                    rows = _split_merged_cells(page_headers, filtered)
+                    page_rows.extend(rows)
 
-        if _validate_table_quality(headers, all_rows):
-            headers, all_rows = _clean_table_result(headers, all_rows)
-            if all_rows:
-                logger.info("PDF table extraction succeeded with strategy: %s", settings)
-                return headers, all_rows
+        if page_rows and page_headers:
+            return page_headers, page_rows
 
-        headers = []
-        all_rows = []
+    return headers, []
+
+
+def _parse_pdf_tables(pdf) -> tuple[list[str], list[dict]]:
+    """Extract tables from PDF — tries multiple strategies PER PAGE.
+
+    Each page may need a different extraction strategy (e.g., page 1 has
+    bordered table, page 2 has slightly different borders). This function
+    tries all strategies per page independently and merges results.
+    """
+    headers: list[str] = []
+    all_rows: list[dict] = []
+
+    for page in pdf.pages:
+        page_headers, page_rows = _extract_page_tables(page, headers)
+
+        if not headers and page_headers:
+            headers = page_headers
+
+        all_rows.extend(page_rows)
+
+    if _validate_table_quality(headers, all_rows):
+        all_rows = _merge_continuation_rows(headers, all_rows)
+        headers, all_rows = _clean_table_result(headers, all_rows)
+        if all_rows:
+            logger.info("PDF table extraction succeeded: %d headers, %d rows", len(headers), len(all_rows))
+            return headers, all_rows
 
     return [], []
 
 
+def _merge_continuation_rows(headers: list[str], rows: list[dict]) -> list[dict]:
+    """Merge continuation rows (no Qty/numeric data) into the previous row.
+
+    Some PDF pages extract multi-line product names as separate rows where
+    the continuation row only has text in the name column and empty elsewhere.
+    """
+    if not rows:
+        return rows
+
+    # Find columns that typically have numeric values (Qty, Price, Total)
+    numeric_cols = []
+    text_cols = []
+    for h in headers:
+        h_lower = h.strip().lower()
+        # Check first few rows to determine if column is numeric
+        has_numbers = False
+        for row in rows[:5]:
+            val = str(row.get(h, "")).strip()
+            if val and re.match(r'^[\d.,]+$', val):
+                has_numbers = True
+                break
+        if has_numbers:
+            numeric_cols.append(h)
+        else:
+            text_cols.append(h)
+
+    if not numeric_cols:
+        return rows
+
+    merged: list[dict] = []
+    for row in rows:
+        # Check if this row has any numeric values
+        has_data = any(
+            str(row.get(col, "")).strip()
+            for col in numeric_cols
+        )
+
+        if has_data or not merged:
+            merged.append(dict(row))
+        else:
+            # Continuation row — merge text columns into previous row
+            prev = merged[-1]
+            for col in text_cols:
+                val = str(row.get(col, "")).strip()
+                if val:
+                    existing = str(prev.get(col, "")).strip()
+                    if existing:
+                        prev[col] = existing + " " + val
+                    else:
+                        prev[col] = val
+
+    return merged
+
+
 def _parse_pdf_lines(pdf) -> tuple[list[str], list[dict]]:
-    """Fallback: parse raw text line by line using word positions."""
-    all_words = []
+    """Fallback: parse raw text from all pages using word positions.
+
+    1. Find header row by keyword matching on each page
+    2. Use word X-positions from header row to define column boundaries
+    3. Map data row words to columns by X-position
+    4. Merge multi-line product names (continuation lines)
+    """
+    # Process each page independently, merge results
+    headers: list[str] = []
+    columns: list[dict] = []  # [{name, x0, x1}, ...]
+    all_rows: list[dict] = []
+
     for page in pdf.pages:
         words = page.extract_words(x_tolerance=3, y_tolerance=3, keep_blank_chars=True)
-        page_height = page.height
-        page_idx = page.page_number - 1
+        if not words:
+            continue
+
+        # Group words by Y position into lines
+        by_y: dict[float, list] = {}
+        y_tol = 4
         for w in words:
-            w["top"] = w["top"] + (page_idx * page_height)
-            w["bottom"] = w["bottom"] + (page_idx * page_height)
-            all_words.append(w)
+            y_key = round(w["top"] / y_tol) * y_tol
+            if y_key not in by_y:
+                by_y[y_key] = []
+            by_y[y_key].append(w)
 
-    if not all_words:
+        sorted_y_keys = sorted(by_y.keys())
+
+        # Find header row on this page (>= 3 keywords)
+        header_y = None
+        for y_key in sorted_y_keys:
+            ws = sorted(by_y[y_key], key=lambda w: w["x0"])
+            line_text = " ".join(w["text"] for w in ws).lower()
+            tokens = re.split(r'[\s./_%]+', line_text)
+            kw_count = sum(1 for t in tokens if t in _TABLE_HEADER_KEYWORDS)
+            if kw_count >= 3:
+                header_y = y_key
+
+                if not headers:
+                    # Build column definitions from header word positions
+                    # Group words with small gaps into column names
+                    cols = []
+                    current_words = [ws[0]]
+                    for w in ws[1:]:
+                        gap = w["x0"] - current_words[-1]["x1"]
+                        if gap > 10:  # significant gap = new column
+                            col_name = " ".join(cw["text"] for cw in current_words).strip()
+                            cols.append({"name": col_name, "x0": current_words[0]["x0"],
+                                         "x1": current_words[-1]["x1"]})
+                            current_words = [w]
+                        else:
+                            current_words.append(w)
+                    if current_words:
+                        col_name = " ".join(cw["text"] for cw in current_words).strip()
+                        cols.append({"name": col_name, "x0": current_words[0]["x0"],
+                                     "x1": current_words[-1]["x1"]})
+
+                    if len(cols) >= 2:
+                        columns = cols
+                        headers = [c["name"] for c in cols]
+                break
+
+        if not columns or header_y is None:
+            continue
+
+        # Process data lines (after header row on this page)
+        for y_key in sorted_y_keys:
+            if y_key <= header_y:
+                continue
+
+            ws = sorted(by_y[y_key], key=lambda w: w["x0"])
+            line_text = " ".join(w["text"] for w in ws).strip()
+
+            # Skip empty / summary / page footer
+            lower = line_text.lower()
+            if not lower:
+                continue
+            if any(lower.startswith(kw) for kw in _SUMMARY_KEYWORDS):
+                break
+            if (lower.startswith("page ") and "of" in lower) or \
+               (lower.startswith("halaman ") and "dari" in lower):
+                continue
+            # Skip repeated header rows
+            tokens = re.split(r'[\s./_%]+', lower)
+            kw_count = sum(1 for t in tokens if t in _TABLE_HEADER_KEYWORDS)
+            if kw_count >= 3:
+                continue
+
+            # Map words to columns by X position
+            row_dict = {h: "" for h in headers}
+            for w in ws:
+                wx_center = (w["x0"] + w["x1"]) / 2
+                best_col = None
+                best_dist = float("inf")
+                for ci, col in enumerate(columns):
+                    # Check if word center falls within column range (with tolerance)
+                    col_center = (col["x0"] + col["x1"]) / 2
+                    dist = abs(wx_center - col_center)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_col = ci
+                if best_col is not None:
+                    h = headers[best_col]
+                    row_dict[h] = (row_dict[h] + " " + w["text"]).strip() if row_dict[h] else w["text"]
+
+            row_dict = {k: v.strip() for k, v in row_dict.items()}
+            if any(row_dict.values()):
+                all_rows.append(row_dict)
+
+    if not headers or not all_rows:
         return [], []
 
-    # Group words into lines by Y position
-    lines: dict[float, list] = {}
-    y_tolerance = 5
-    for w in all_words:
-        y_key = round(w["top"] / y_tolerance) * y_tolerance
-        if y_key not in lines:
-            lines[y_key] = []
-        lines[y_key].append(w)
-
-    sorted_lines = []
-    for y_key in sorted(lines.keys()):
-        words_in_line = sorted(lines[y_key], key=lambda w: w["x0"])
-        line_text = " ".join(w["text"] for w in words_in_line).strip()
-        if line_text:
-            sorted_lines.append({"text": line_text, "words": words_in_line, "y": y_key})
-
-    if not sorted_lines:
-        return [], []
-
-    # Detect header line using keywords
-    header_idx = None
-    for i, line in enumerate(sorted_lines):
-        text = line["text"].lower()
-        tokens = re.split(r'[\s./_%]+', text)
-        keyword_count = sum(1 for t in tokens if t in _TABLE_HEADER_KEYWORDS)
-        if keyword_count >= 2 and len(line["text"]) < 200:
-            header_idx = i
-            break
-
-    if header_idx is None:
-        return [], []
-
-    # Build columns from header word positions
-    header_words = sorted_lines[header_idx]["words"]
-    columns = []
-    current_col_words = [header_words[0]]
-    for w in header_words[1:]:
-        prev = current_col_words[-1]
-        gap = w["x0"] - prev["x1"]
-        if gap > 15:
-            col_name = " ".join(cw["text"] for cw in current_col_words).strip()
-            columns.append({"name": col_name, "x0": current_col_words[0]["x0"], "x1": current_col_words[-1]["x1"]})
-            current_col_words = [w]
-        else:
-            current_col_words.append(w)
-    if current_col_words:
-        col_name = " ".join(cw["text"] for cw in current_col_words).strip()
-        columns.append({"name": col_name, "x0": current_col_words[0]["x0"], "x1": current_col_words[-1]["x1"]})
-
-    if len(columns) < 2:
-        return [], []
-
-    headers = [c["name"] for c in columns]
-    all_rows = []
-
-    for line in sorted_lines[header_idx + 1:]:
-        row_dict = {h: "" for h in headers}
-        for w in line["words"]:
-            wx_center = (w["x0"] + w["x1"]) / 2
-            best_col = None
-            best_dist = float("inf")
-            for ci, col in enumerate(columns):
-                col_center = (col["x0"] + col["x1"]) / 2
-                dist = abs(wx_center - col_center)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_col = ci
-            if best_col is not None:
-                h = headers[best_col]
-                row_dict[h] = (row_dict[h] + " " + w["text"]).strip() if row_dict[h] else w["text"]
-
-        row_dict = {k: v.strip() for k, v in row_dict.items()}
-        if any(row_dict.values()):
-            all_rows.append(row_dict)
-
+    all_rows = _merge_continuation_rows(headers, all_rows)
     headers, all_rows = _clean_table_result(headers, all_rows)
     return headers, all_rows
 
@@ -614,8 +801,10 @@ def _parse_pdf(file_path: str) -> ParseResult:
                     ],
                 )
 
-            logger.info("PDF parsed: %d headers, %d rows — %s", len(headers), len(rows), headers)
-            return ParseResult(headers=headers, rows=rows, row_count=len(rows))
+            # Extract metadata (invoice ID, etc.) from PDF header area
+            metadata = _extract_pdf_metadata(pdf)
+            logger.info("PDF parsed: %d headers, %d rows, metadata=%s — %s", len(headers), len(rows), metadata, headers)
+            return ParseResult(headers=headers, rows=rows, row_count=len(rows), metadata=metadata)
 
     except Exception as exc:
         logger.exception("Failed to parse PDF: %s", file_path)

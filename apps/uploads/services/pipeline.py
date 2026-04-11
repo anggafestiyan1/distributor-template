@@ -127,8 +127,7 @@ def _execute_pipeline(batch, run) -> None:
         batch.status = UploadBatch.STATUS_MISMATCH
         batch.error_message = "No matching template found."
         batch.save(update_fields=["status", "error_message", "updated_at"])
-        from django.utils import timezone as _tz
-        run.completed_at = _tz.now()
+        run.completed_at = timezone.now()
         run.save(update_fields=["completed_at"])
         return
 
@@ -144,18 +143,15 @@ def _execute_pipeline(batch, run) -> None:
     standard_fields_by_id = {sf.pk: sf for sf in standard_fields}
 
     # ── 7. Process rows ───────────────────────────────────────────────────────
-    import_rows_to_create = []
-    row_checksums_in_run: set[str] = set()
     from .parser import compute_row_checksum
 
     all_import_rows = []
 
     for i, raw_row in enumerate(parse_result.rows, start=1):
-        from .parser import compute_row_checksum as _crc
-
-        row_checksum = _crc(raw_row)
+        row_checksum = compute_row_checksum(raw_row)
         mapped_data = _map_row(raw_row, header_map, mappings, alias_lookup, standard_fields_by_id)
         _inject_batch_context(mapped_data, batch, standard_fields_by_id)
+        _inject_pdf_metadata(mapped_data, parse_result.metadata, standard_fields_by_id)
         business_key = compute_business_key(mapped_data, batch.distributor.code)
 
         # Row-level validation
@@ -209,7 +205,6 @@ def _execute_pipeline(batch, run) -> None:
     batch.row_count = len(all_import_rows)
     batch.save(update_fields=["status", "row_count", "updated_at"])
 
-    from django.utils import timezone
     run.completed_at = timezone.now()
     run.save(update_fields=["completed_at"])
 
@@ -302,6 +297,31 @@ def _inject_batch_context(mapped_data: dict, batch, standard_fields_by_id: dict)
                 mapped_data[sf.name] = str(obj)
         except Exception:
             pass
+
+
+# Mapping from PDF metadata keys → StandardMasterField names
+_PDF_METADATA_FIELD_MAP = {
+    "invoice_id": "invoice_id",
+}
+
+
+def _inject_pdf_metadata(mapped_data: dict, metadata: dict, standard_fields_by_id: dict) -> None:
+    """Inject PDF header metadata (invoice_id, etc.) into mapped_data.
+
+    Only injects if the corresponding StandardMasterField exists and is active,
+    and the field is not already populated from the file.
+    """
+    if not metadata:
+        return
+    field_names = {sf.name: sf for sf in standard_fields_by_id.values()}
+    for meta_key, field_name in _PDF_METADATA_FIELD_MAP.items():
+        if field_name in mapped_data:
+            continue  # Already populated
+        if field_name not in field_names:
+            continue  # Field doesn't exist in Standard Master Fields
+        val = metadata.get(meta_key)
+        if val:
+            mapped_data[field_name] = str(val)
 
 
 def _fail_batch(batch, run, error_message: str) -> None:

@@ -3,7 +3,6 @@ from django.contrib import admin
 from .models import (
     DistributorProduct,
     DistributorStock,
-    MainStock,
     Product,
     StockMovement,
     WarehouseFieldConfig,
@@ -15,12 +14,6 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = ["sku", "name", "category", "unit", "is_active"]
     search_fields = ["sku", "name"]
     list_filter = ["category", "is_active"]
-
-
-@admin.register(MainStock)
-class MainStockAdmin(admin.ModelAdmin):
-    list_display = ["product", "quantity", "updated_at"]
-    search_fields = ["product__sku", "product__name"]
 
 
 @admin.register(DistributorProduct)

@@ -286,7 +286,7 @@ def compute_business_key(mapped_data: dict, distributor_code: str) -> str:
     falling back to all required fields.
     """
     parts = [distributor_code]
-    for key in ["invoice_date", "item_name", "invoice_number", "product_code"]:
+    for key in ["invoice_id", "invoice_date", "item_name", "invoice_number", "product_code"]:
         val = str(mapped_data.get(key, "")).strip()
         if val:
             parts.append(val)

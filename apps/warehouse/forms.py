@@ -16,6 +16,11 @@ class ProductForm(forms.ModelForm):
 
 
 class DistributorProductForm(forms.ModelForm):
+    initial_quantity = forms.IntegerField(
+        min_value=0, initial=0, required=False,
+        help_text="Initial stock quantity for this distributor (only on create)",
+    )
+
     class Meta:
         model = DistributorProduct
         fields = ["distributor", "product", "alias_sku", "alias_name", "is_active"]
@@ -25,6 +30,9 @@ class DistributorProductForm(forms.ModelForm):
         from apps.distributors.models import Distributor
         self.fields["distributor"].queryset = Distributor.objects.filter(is_active=True)
         self.fields["product"].queryset = Product.objects.filter(is_active=True)
+        # Hide initial_quantity on edit (only show on create)
+        if self.instance and self.instance.pk:
+            del self.fields["initial_quantity"]
 
 
 class StockAdjustForm(forms.Form):

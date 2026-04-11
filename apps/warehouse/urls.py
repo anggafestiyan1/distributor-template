@@ -11,10 +11,6 @@ urlpatterns = [
     path("products/<int:pk>/edit/", views.ProductEditView.as_view(), name="product_edit"),
     path("products/<int:pk>/delete/", views.ProductDeleteView.as_view(), name="product_delete"),
 
-    # Main Stock
-    path("main-stock/", views.MainStockListView.as_view(), name="main_stock_list"),
-    path("main-stock/<int:pk>/adjust/", views.MainStockAdjustView.as_view(), name="main_stock_adjust"),
-
     # Distributor Products (assign + alias)
     path("distributor-products/", views.DistributorProductListView.as_view(), name="distributor_product_list"),
     path("distributor-products/create/", views.DistributorProductCreateView.as_view(), name="distributor_product_create"),

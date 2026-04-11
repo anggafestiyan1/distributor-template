@@ -1,9 +1,10 @@
 """Review workflow views — file-level and row-level."""
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -11,7 +12,9 @@ from django.views.generic import ListView, View
 
 from apps.core.mixins import HtmxMixin, StaffOrAdminMixin
 from apps.distributors.models import get_user_distributors
-from apps.uploads.models import ImportRow, ProcessingRun, UploadBatch
+from apps.field_templates.models import StandardMasterField
+from apps.master_data.models import MasterDataImport, MasterDataRecord
+from apps.uploads.models import ImportRow, ProcessingRun, UploadBatch, ValidationIssue
 from .models import ReviewAction
 
 
@@ -25,8 +28,6 @@ def _normalize_for_master(mapped_data: dict, standard_fields) -> dict:
     - Missing fields → empty string
     - Field order follows StandardMasterField.order
     """
-    from decimal import Decimal, InvalidOperation
-
     result = {}
     for sf in standard_fields:
         raw = str(mapped_data.get(sf.name, "")).strip()
@@ -68,9 +69,9 @@ def _apply_row_decision(import_row: ImportRow, decision: str, note: str, user) -
     import_row.review_note = note
     import_row.reviewed_by = user
     import_row.reviewed_at = timezone.now()
-    if decision == "approved":
+    if decision == ImportRow.DECISION_APPROVED:
         import_row.row_status = ImportRow.ROW_STATUS_APPROVED
-    elif decision == "rejected":
+    elif decision == ImportRow.DECISION_REJECTED:
         import_row.row_status = ImportRow.ROW_STATUS_REJECTED
     import_row.save(update_fields=[
         "review_decision", "review_note", "reviewed_by", "reviewed_at", "row_status"
@@ -107,7 +108,7 @@ class ReviewBatchView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
     def get(self, request, pk):
         from django.core.paginator import Paginator
-        from apps.field_templates.models import StandardMasterField
+
 
         run = get_object_or_404(
             ProcessingRun.objects.select_related(
@@ -165,17 +166,32 @@ class ReviewBatchView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
 
 class ApproveRowView(LoginRequiredMixin, HtmxMixin, View):
-    """HTMX: approve a single import row, reduce stock, return updated row partial."""
+    """HTMX: approve a single import row. Check product exists in distributor warehouse."""
 
     def post(self, request, pk):
         row = get_object_or_404(ImportRow.objects.select_related("processing_run__batch__distributor"), pk=pk)
         note = request.POST.get("note", "")
-        _apply_row_decision(row, "approved", note, request.user)
 
-        # Reduce stock on approve
-        from apps.warehouse.services.stock import reduce_stock_for_single_row
-        reduce_stock_for_single_row(row, request.user)
+        # Check product exists in distributor warehouse
+        from apps.warehouse.services.stock import check_product_exists
+        check = check_product_exists(row, row.processing_run.batch.distributor)
+        if check and not check["found"]:
+            # Product not found → mark as problem (invalid + warning)
 
+            row.row_status = ImportRow.ROW_STATUS_INVALID
+            row.review_decision = ImportRow.DECISION_PENDING
+            row.save(update_fields=["row_status", "review_decision"])
+            ValidationIssue.objects.create(
+                import_row=row,
+                category="business",
+                severity="error",
+                code="PRODUCT_NOT_IN_WAREHOUSE",
+                message=f"Product '{check['value']}' not found in distributor warehouse.",
+                field_name="item_name",
+            )
+            return _row_response(request, row)
+
+        _apply_row_decision(row, ImportRow.DECISION_APPROVED, note, request.user)
         return _row_response(request, row)
 
 
@@ -185,37 +201,48 @@ class RejectRowView(LoginRequiredMixin, HtmxMixin, View):
     def post(self, request, pk):
         row = get_object_or_404(ImportRow, pk=pk)
         note = request.POST.get("note", "")
-        _apply_row_decision(row, "rejected", note, request.user)
+        _apply_row_decision(row, ImportRow.DECISION_REJECTED, note, request.user)
         return _row_response(request, row)
 
 
 class ApproveAllView(LoginRequiredMixin, StaffOrAdminMixin, View):
-    """Approve all pending rows in a ProcessingRun and reduce stock."""
+    """Approve all pending rows. Rows without matching product → problem."""
 
     def post(self, request, pk):
         run = get_object_or_404(ProcessingRun.objects.select_related("batch__distributor"), pk=pk)
         rows = list(run.import_rows.filter(review_decision=ImportRow.DECISION_PENDING))
-        count = len(rows)
-        for row in rows:
-            _apply_row_decision(row, "approved", "Bulk approved", request.user)
+        distributor = run.batch.distributor
 
-        # Bulk stock reduction
-        if rows:
-            from apps.warehouse.services.stock import reduce_stock_for_rows
-            stock_result = reduce_stock_for_rows(
-                distributor=run.batch.distributor,
-                rows=rows,
-                user=request.user,
-                reference=f"Bulk Approve (Run #{run.pk})",
-            )
-            msg = f"Approved {count} rows."
-            if not stock_result.get("skipped"):
-                msg += f" Stock reduced for {stock_result['matched']} product(s)."
-                if stock_result["unmatched"]:
-                    msg += f" {stock_result['unmatched']} unmatched."
-            messages.success(request, msg)
-        else:
-            messages.success(request, f"Approved {count} rows.")
+        # Check products for all rows
+        from apps.warehouse.services.stock import check_products_for_rows
+        from apps.uploads.models import ValidationIssue
+        checks = check_products_for_rows(rows, distributor)
+
+        approved_count = 0
+        problem_count = 0
+        for row in rows:
+            check = checks.get(row.pk)
+            if check and not check["found"]:
+                # Product not found → mark as problem
+                row.row_status = ImportRow.ROW_STATUS_INVALID
+                row.save(update_fields=["row_status"])
+                ValidationIssue.objects.create(
+                    import_row=row,
+                    category="business",
+                    severity="error",
+                    code="PRODUCT_NOT_IN_WAREHOUSE",
+                    message=f"Product '{check['value']}' not found in distributor warehouse.",
+                    field_name="item_name",
+                )
+                problem_count += 1
+            else:
+                _apply_row_decision(row, ImportRow.DECISION_APPROVED, "Bulk approved", request.user)
+                approved_count += 1
+
+        msg = f"Approved {approved_count} rows."
+        if problem_count:
+            msg += f" {problem_count} row(s) marked as problem (product not in warehouse)."
+        messages.success(request, msg)
         return redirect(reverse("review:review_batch", kwargs={"pk": pk}))
 
 
@@ -227,7 +254,7 @@ class RejectAllView(LoginRequiredMixin, StaffOrAdminMixin, View):
         rows = list(run.import_rows.filter(review_decision=ImportRow.DECISION_PENDING))
         count = len(rows)
         for row in rows:
-            _apply_row_decision(row, "rejected", "Bulk rejected", request.user)
+            _apply_row_decision(row, ImportRow.DECISION_REJECTED, "Bulk rejected", request.user)
         messages.success(request, f"Rejected {count} rows.")
         return redirect(reverse("review:review_batch", kwargs={"pk": pk}))
 
@@ -246,8 +273,8 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
         # Only promote approved rows — rejected are skipped
         approved_rows = run.import_rows.filter(review_decision=ImportRow.DECISION_APPROVED)
-        from apps.master_data.models import MasterDataRecord, MasterDataImport
-        from apps.field_templates.models import StandardMasterField
+
+
 
         standard_fields = list(StandardMasterField.objects.order_by("order", "name"))
 
@@ -292,13 +319,26 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
         if skipped:
             msg += f" ({skipped} already existed and were skipped.)"
 
+        # Deduct stock on finalize
+        if created_count > 0:
+            from apps.warehouse.services.stock import reduce_stock_for_rows
+            newly_created = list(approved_rows.filter(master_record__master_import=master_import))
+            stock_result = reduce_stock_for_rows(
+                distributor=run.batch.distributor,
+                rows=newly_created,
+                user=request.user,
+                reference=f"Finalize (Import {master_import.code})",
+            )
+            if not stock_result.get("skipped"):
+                msg += f" Stock deducted for {stock_result['matched']} product(s)."
+
         messages.success(request, msg)
         return redirect(reverse("review:review_batch", kwargs={"pk": pk}))
 
 
 def _row_response(request, row: ImportRow):
     """Return the table row partial for HTMX swap."""
-    from apps.field_templates.models import StandardMasterField
+
     row.refresh_from_db()
 
     displayed_fields = StandardMasterField.objects.filter(

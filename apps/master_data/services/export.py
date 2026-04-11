@@ -22,10 +22,7 @@ def export_master_data(queryset, format_: str, standard_fields: list) -> FileRes
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"master_data_{timestamp}.{format_}"
 
-    column_names = (
-        ["distributor_code", "distributor_name", "area", "imported_at"]
-        + [sf.name for sf in standard_fields]
-    )
+    column_names = [sf.display_name for sf in standard_fields]
 
     if format_ == "csv":
         return _export_csv(queryset, column_names, standard_fields, filename)
@@ -36,15 +33,7 @@ def export_master_data(queryset, format_: str, standard_fields: list) -> FileRes
 
 
 def _row_to_values(record, standard_fields: list) -> list:
-    values = [
-        record.distributor.code,
-        record.distributor.name,
-        record.area,
-        record.imported_at.strftime("%Y-%m-%d %H:%M:%S") if record.imported_at else "",
-    ]
-    for sf in standard_fields:
-        values.append(record.data.get(sf.name, ""))
-    return values
+    return [record.data.get(sf.name, "") for sf in standard_fields]
 
 
 class _EchoBuffer:

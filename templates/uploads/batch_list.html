@@ -7,9 +7,14 @@
     <h4><i class="bi bi-cloud-upload me-2"></i>Uploads</h4>
     <p class="page-subtitle">File batches uploaded by distributors for processing</p>
   </div>
-  <a href="{% url 'uploads:batch_upload' %}" class="btn btn-sm btn-primary flex-shrink-0">
-    <i class="bi bi-upload me-1"></i> New Upload
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'uploads:batch_list' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-outline-secondary flex-shrink-0">
+      <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+    </a>
+    <a href="{% url 'uploads:batch_upload' %}" class="btn btn-sm btn-primary flex-shrink-0">
+      <i class="bi bi-upload me-1"></i>New Upload
+    </a>
+  </div>
 </div>
 
 <!-- Filter -->
@@ -38,10 +43,12 @@
     <table class="table table-sm table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
+          <th>Review ID</th>
           <th>File</th>
           <th>Distributor</th>
           <th>Status</th>
           <th>Rows</th>
+          <th>Issues</th>
           <th>Uploaded by</th>
           <th>Date</th>
           <th></th>
@@ -50,6 +57,7 @@
       <tbody>
         {% for batch in batches %}
         <tr>
+          <td><code class="fw-bold">{{ batch.review_code }}</code></td>
           <td>
             <a href="{% url 'uploads:batch_detail' batch.pk %}" class="fw-medium text-decoration-none">
               {{ batch.original_filename }}
@@ -63,17 +71,43 @@
             <span class="badge bg-{{ batch.status_badge_class }}">{{ batch.get_status_display }}</span>
           </td>
           <td class="text-muted">{{ batch.row_count|default:"—" }}</td>
+          <td>
+            {% with run=batch.get_latest_run %}
+              {% if run %}
+                {% with summary=run.review_summary %}
+                  {% if summary.problem > 0 %}
+                    <span class="badge bg-danger">{{ summary.problem }}</span>
+                  {% else %}
+                    <span class="text-muted">0</span>
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            {% endwith %}
+          </td>
           <td class="text-muted">{{ batch.uploaded_by.username|default:"—" }}</td>
           <td class="text-muted small text-nowrap">{{ batch.created_at|date:"d M Y H:i" }}</td>
           <td>
             <div class="d-flex gap-1">
               <a href="{% url 'uploads:batch_detail' batch.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+              {% if batch.status == "error" or batch.status == "mismatch" %}
+              <form method="post" action="{% url 'uploads:batch_quick_reprocess' batch.pk %}"
+                    onsubmit="return confirm('Reprocess this batch?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-warning">
+                  <i class="bi bi-arrow-repeat"></i>
+                </button>
+              </form>
+              {% endif %}
               {% if user.is_admin or user.is_superuser %}
               {% if batch.status != "processing" %}
               <form method="post" action="{% url 'uploads:batch_delete' batch.pk %}"
-                    onsubmit="return confirm('Delete batch \'{{ batch.original_filename }}\'? This cannot be undone.')">
+                    onsubmit="return confirm('Delete batch \'{{ batch.original_filename }}\'?')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
               </form>
               {% endif %}
               {% endif %}
@@ -82,7 +116,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7">
+          <td colspan="9">
             <div class="empty-state">
               <i class="bi bi-cloud-upload"></i>
               <p class="empty-title">No uploads yet</p>

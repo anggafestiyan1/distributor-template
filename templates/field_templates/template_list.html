@@ -66,6 +66,9 @@
                 <div class="d-flex gap-1">
                   <a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
                   <a href="{% url 'field_templates:template_edit' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  {% if latest and not latest.is_in_use %}
+                  <a href="{% url 'field_templates:version_mappings' latest.pk %}" class="btn btn-sm btn-outline-primary">Mappings</a>
+                  {% endif %}
                   <form method="post" action="{% url 'field_templates:template_delete' tmpl.pk %}"
                         onsubmit="return confirm('Delete template \'{{ tmpl.name }}\'? All versions will be removed.')">
                     {% csrf_token %}
@@ -129,6 +132,9 @@
                 <div class="d-flex gap-1">
                   <a href="{% url 'field_templates:template_detail' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
                   <a href="{% url 'field_templates:template_edit' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  {% if latest and not latest.is_in_use %}
+                  <a href="{% url 'field_templates:version_mappings' latest.pk %}" class="btn btn-sm btn-outline-primary">Mappings</a>
+                  {% endif %}
                   <form method="post" action="{% url 'field_templates:template_delete' tmpl.pk %}"
                         onsubmit="return confirm('Delete template \'{{ tmpl.name }}\'? All versions will be removed.')">
                     {% csrf_token %}

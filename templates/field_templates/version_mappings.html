@@ -5,18 +5,20 @@
   <h4 class="mb-0">Edit Mappings — {{ version }}</h4>
   <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-sm btn-outline-secondary">Back</a>
 </div>
-<p class="text-muted small">
-  Map distributor file column headers to standard master fields.
-  The "Source Column" is the exact header name as it appears in the distributor file.
-  Aliases can be added separately via the Fields page.
-</p>
-<div class="card">
-  <div class="card-body">
-    <form method="post">
-      {% csrf_token %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <!-- ═══ Table Column Mappings ═══ -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-table me-1"></i> Table Column Mappings
+      <span class="text-muted small ms-2">— Map file table columns to standard fields</span>
+    </div>
+    <div class="card-body">
       {{ formset.management_form }}
       <div class="table-responsive">
-        <table class="table table-sm align-middle" id="mapping-table">
+        <table class="table table-sm align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>Standard Field</th>
@@ -26,7 +28,7 @@
           </thead>
           <tbody id="mapping-formset">
             {% for mapping_form in formset %}
-              <tr class="mapping-row">
+              <tr>
                 <td>
                   {{ mapping_form.id }}
                   {{ mapping_form.standard_field }}
@@ -42,24 +44,16 @@
                 </td>
                 <td class="text-center">{{ mapping_form.DELETE }}</td>
               </tr>
-              {% if mapping_form.non_field_errors %}
-              <tr>
-                <td colspan="3"><span class="text-danger small">{{ mapping_form.non_field_errors|join:", " }}</span></td>
-              </tr>
-              {% endif %}
             {% endfor %}
           </tbody>
         </table>
       </div>
-
-      <!-- Template row (hidden, cloned by JS) -->
       <table class="d-none">
         <tbody id="mapping-row-template">
-          <tr class="mapping-row">
+          <tr>
             <td>
-              <input type="hidden" name="{{ formset.prefix }}-__prefix__-id" id="id_{{ formset.prefix }}-__prefix__-id">
-              <select name="{{ formset.prefix }}-__prefix__-standard_field" id="id_{{ formset.prefix }}-__prefix__-standard_field"
-                      class="form-select form-select-sm">
+              <input type="hidden" name="{{ formset.prefix }}-__prefix__-id">
+              <select name="{{ formset.prefix }}-__prefix__-standard_field" class="form-select form-select-sm">
                 <option value="">---------</option>
                 {% for sf in standard_fields %}
                   <option value="{{ sf.pk }}">{{ sf.display_name }}</option>
@@ -67,43 +61,110 @@
               </select>
             </td>
             <td>
-              <input type="text" name="{{ formset.prefix }}-__prefix__-source_column" id="id_{{ formset.prefix }}-__prefix__-source_column"
-                     class="form-control form-control-sm" placeholder="e.g. Product Name">
+              <input type="text" name="{{ formset.prefix }}-__prefix__-source_column"
+                     class="form-control form-control-sm" placeholder="e.g. Nama Barang">
             </td>
             <td class="text-center">
-              <input type="checkbox" name="{{ formset.prefix }}-__prefix__-DELETE" id="id_{{ formset.prefix }}-__prefix__-DELETE"
-                     class="form-check-input">
+              <input type="checkbox" name="{{ formset.prefix }}-__prefix__-DELETE" class="form-check-input">
             </td>
           </tr>
         </tbody>
       </table>
-
-      <div class="d-flex gap-2 mt-3">
-        <button type="submit" class="btn btn-primary">Save Mappings</button>
-        <button type="button" class="btn btn-outline-secondary" id="add-mapping-row">
-          <i class="bi bi-plus-lg me-1"></i>Add Row
-        </button>
-        <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-outline-secondary">Cancel</a>
-      </div>
-    </form>
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="add-mapping-row">
+        <i class="bi bi-plus-lg me-1"></i>Add Column Mapping
+      </button>
+    </div>
   </div>
-</div>
+
+  <!-- ═══ Header Field Mappings (PDF) ═══ -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-file-earmark-text me-1"></i> Header Field Mappings
+      <span class="text-muted small ms-2">— Extract metadata from PDF/image header area (Invoice Id, Customer, etc.)</span>
+    </div>
+    <div class="card-body">
+      {{ header_formset.management_form }}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Standard Field</th>
+              <th>Label (in PDF header)</th>
+              <th style="width:60px;">Delete</th>
+            </tr>
+          </thead>
+          <tbody id="header-formset">
+            {% for hf in header_formset %}
+              <tr>
+                <td>
+                  {{ hf.id }}
+                  {{ hf.standard_field }}
+                  {% if hf.standard_field.errors %}
+                    <div class="text-danger small">{{ hf.standard_field.errors|join:", " }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ hf.label }}
+                  {% if hf.label.errors %}
+                    <div class="text-danger small">{{ hf.label.errors|join:", " }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-center">{{ hf.DELETE }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <table class="d-none">
+        <tbody id="header-row-template">
+          <tr>
+            <td>
+              <input type="hidden" name="{{ header_formset.prefix }}-__prefix__-id">
+              <select name="{{ header_formset.prefix }}-__prefix__-standard_field" class="form-select form-select-sm">
+                <option value="">---------</option>
+                {% for sf in standard_fields %}
+                  <option value="{{ sf.pk }}">{{ sf.display_name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input type="text" name="{{ header_formset.prefix }}-__prefix__-label"
+                     class="form-control form-control-sm" placeholder='e.g. Invoice Id, Customer, Telp'>
+            </td>
+            <td class="text-center">
+              <input type="checkbox" name="{{ header_formset.prefix }}-__prefix__-DELETE" class="form-check-input">
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="add-header-row">
+        <i class="bi bi-plus-lg me-1"></i>Add Header Mapping
+      </button>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Save All Mappings</button>
+    <a href="{% url 'field_templates:template_detail' version.template_id %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
 
 <script>
 (function () {
-  const prefix = '{{ formset.prefix }}';
-  document.getElementById('add-mapping-row').addEventListener('click', function () {
-    const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
-    const idx = parseInt(totalForms.value);
-    const templateBody = document.getElementById('mapping-row-template');
-    const newRow = templateBody.querySelector('tr').cloneNode(true);
+  function addRowHandler(buttonId, templateId, formsetId, prefix) {
+    document.getElementById(buttonId).addEventListener('click', function () {
+      const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+      const idx = parseInt(totalForms.value);
+      const templateBody = document.getElementById(templateId);
+      const newRow = templateBody.querySelector('tr').cloneNode(true);
+      newRow.innerHTML = newRow.innerHTML.replaceAll('__prefix__', idx);
+      document.getElementById(formsetId).appendChild(newRow);
+      totalForms.value = idx + 1;
+    });
+  }
 
-    // Replace __prefix__ with current index
-    newRow.innerHTML = newRow.innerHTML.replaceAll('__prefix__', idx);
-
-    document.getElementById('mapping-formset').appendChild(newRow);
-    totalForms.value = idx + 1;
-  });
+  addRowHandler('add-mapping-row', 'mapping-row-template', 'mapping-formset', '{{ formset.prefix }}');
+  addRowHandler('add-header-row', 'header-row-template', 'header-formset', '{{ header_formset.prefix }}');
 })();
 </script>
 {% endblock %}

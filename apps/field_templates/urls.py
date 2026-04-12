@@ -9,7 +9,6 @@ urlpatterns = [
     path("create/", views.FieldCreateView.as_view(), name="field_create"),
     path("<int:pk>/edit/", views.FieldEditView.as_view(), name="field_edit"),
     path("<int:pk>/delete/", views.FieldDeleteView.as_view(), name="field_delete"),
-    path("<int:pk>/aliases/", views.FieldAliasView.as_view(), name="field_aliases"),
     path("<int:pk>/toggle-active/", views.FieldToggleActiveView.as_view(), name="field_toggle_active"),
     path("<int:pk>/toggle-displayed/", views.FieldToggleDisplayedView.as_view(), name="field_toggle_displayed"),
     # Standard field template download

@@ -18,6 +18,10 @@ class UploadBatch(models.Model):
         (STATUS_MISMATCH, "Template Mismatch"),
     ]
 
+    review_code = models.CharField(
+        max_length=20, unique=True, blank=True,
+        help_text="Auto-generated Review ID (RID-XXXXX)",
+    )
     distributor = models.ForeignKey(
         "distributors.Distributor",
         on_delete=models.PROTECT,
@@ -44,7 +48,18 @@ class UploadBatch(models.Model):
         verbose_name_plural = "Upload Batches"
 
     def __str__(self) -> str:
-        return f"{self.original_filename} ({self.distributor.code}) [{self.status}]"
+        return f"{self.review_code} — {self.original_filename}"
+
+    def save(self, *args, **kwargs):
+        if not self.review_code:
+            self.review_code = self._generate_code()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def _generate_code(cls):
+        last = cls.objects.order_by("-pk").first()
+        next_num = (last.pk + 1) if last else 1
+        return f"RID-{next_num:05d}"
 
     def get_latest_run(self):
         return self.processing_runs.order_by("-run_number").first()

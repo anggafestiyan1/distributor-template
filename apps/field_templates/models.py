@@ -74,38 +74,6 @@ class StandardMasterField(models.Model):
         super().delete(*args, **kwargs)
 
 
-class FieldAlias(models.Model):
-    """Alternative column header names that map to a StandardMasterField."""
-
-    standard_field = models.ForeignKey(
-        StandardMasterField,
-        on_delete=models.CASCADE,
-        related_name="aliases",
-    )
-    alias_normalized = models.CharField(
-        max_length=200,
-        help_text="Auto-normalized alias (set automatically on save)",
-    )
-    alias_original = models.CharField(
-        max_length=200,
-        help_text="Original alias as entered by user",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ("standard_field", "alias_normalized")
-        verbose_name = "Field Alias"
-        verbose_name_plural = "Field Aliases"
-        ordering = ["standard_field__name", "alias_original"]
-
-    def __str__(self) -> str:
-        return f"{self.alias_original} → {self.standard_field.name}"
-
-    def save(self, *args, **kwargs):
-        self.alias_normalized = normalize_header(self.alias_original)
-        super().save(*args, **kwargs)
-
-
 class Template(models.Model):
     SCOPE_GLOBAL = "global"
     SCOPE_ASSIGNED = "assigned"
@@ -223,7 +191,6 @@ class TemplateFieldMapping(models.Model):
     )
 
     class Meta:
-        unique_together = ("template_version", "standard_field")
         verbose_name = "Template Field Mapping"
         verbose_name_plural = "Template Field Mappings"
         ordering = ["standard_field__order"]
@@ -234,3 +201,36 @@ class TemplateFieldMapping(models.Model):
     def save(self, *args, **kwargs):
         self.source_column_normalized = normalize_header(self.source_column)
         super().save(*args, **kwargs)
+
+
+class HeaderFieldMapping(models.Model):
+    """Maps a PDF header label to a StandardMasterField.
+
+    Used to extract metadata from the header area of PDF invoices
+    (e.g., Invoice Id, Customer Name, Phone) — not from the data table.
+    Admin defines the label text to search for; the pipeline extracts the value.
+    """
+
+    template_version = models.ForeignKey(
+        TemplateVersion,
+        on_delete=models.CASCADE,
+        related_name="header_mappings",
+    )
+    standard_field = models.ForeignKey(
+        StandardMasterField,
+        on_delete=models.PROTECT,
+        related_name="header_mappings",
+    )
+    label = models.CharField(
+        max_length=200,
+        help_text='Label text to search for in PDF header (e.g. "Invoice Id", "Customer", "Telp")',
+    )
+
+    class Meta:
+        unique_together = ("template_version", "standard_field")
+        verbose_name = "Header Field Mapping"
+        verbose_name_plural = "Header Field Mappings"
+        ordering = ["standard_field__order"]
+
+    def __str__(self) -> str:
+        return f'"{self.label}" → {self.standard_field.name}'

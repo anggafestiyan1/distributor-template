@@ -100,6 +100,9 @@ class RecordDetailView(LoginRequiredMixin, DetailView):
             for sf in displayed_fields
             if sf.name in record.data
         ]
+        # Master product info (enriched during finalize)
+        ctx["product_master_name"] = record.data.get("_product_master_name", "")
+        ctx["product_master_sku"] = record.data.get("_product_master_sku", "")
         return ctx
 
 

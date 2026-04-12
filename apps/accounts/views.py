@@ -14,9 +14,31 @@ from apps.core.mixins import AdminRequiredMixin
 class LoginView(auth_views.LoginView):
     template_name = "accounts/login.html"
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=self.request.user,
+            action=ActivityLog.ACTION_LOGIN,
+            description=f"User '{self.request.user.username}' logged in",
+            request=self.request,
+        )
+        return response
+
 
 class LogoutView(auth_views.LogoutView):
-    pass
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            from apps.core.services import log_activity
+            from apps.core.models import ActivityLog
+            log_activity(
+                user=request.user,
+                action=ActivityLog.ACTION_LOGOUT,
+                description=f"User '{request.user.username}' logged out",
+                request=request,
+            )
+        return super().dispatch(request, *args, **kwargs)
 
 
 class UserListView(LoginRequiredMixin, AdminRequiredMixin, ListView):

@@ -8,7 +8,7 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 
 from apps.core.mixins import StaffOrAdminMixin
 from .forms import (
-    FieldAliasFormSet,
+    HeaderFieldMappingFormSet,
     StandardMasterFieldForm,
     TemplateFieldMappingFormSet,
     TemplateForm,
@@ -32,11 +32,22 @@ class FieldCreateView(LoginRequiredMixin, StaffOrAdminMixin, CreateView):
     template_name = "field_templates/field_form.html"
 
     def get_success_url(self):
-        return reverse("field_templates:field_aliases", kwargs={"pk": self.object.pk})
+        return reverse("field_templates:field_list")
 
     def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=self.request.user,
+            action=ActivityLog.ACTION_CREATE,
+            description=f"Created Standard Field '{self.object.display_name}' ({self.object.name})",
+            target=self.object,
+            details={"name": self.object.name, "data_type": self.object.data_type},
+            request=self.request,
+        )
         messages.success(self.request, "Field created.")
-        return super().form_valid(form)
+        return response
 
 
 class FieldEditView(LoginRequiredMixin, StaffOrAdminMixin, UpdateView):
@@ -46,8 +57,19 @@ class FieldEditView(LoginRequiredMixin, StaffOrAdminMixin, UpdateView):
     success_url = reverse_lazy("field_templates:field_list")
 
     def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=self.request.user,
+            action=ActivityLog.ACTION_UPDATE,
+            description=f"Updated Standard Field '{self.object.display_name}'",
+            target=self.object,
+            details={"changed_fields": list(form.changed_data)},
+            request=self.request,
+        )
         messages.success(self.request, "Field updated.")
-        return super().form_valid(form)
+        return response
 
 
 class FieldDeleteView(LoginRequiredMixin, StaffOrAdminMixin, View):
@@ -55,8 +77,19 @@ class FieldDeleteView(LoginRequiredMixin, StaffOrAdminMixin, View):
         from django.db.models import ProtectedError
         field = get_object_or_404(StandardMasterField, pk=pk)
         name = field.display_name
+        code_name = field.name
+        pk_val = field.pk
         try:
             field.delete()
+            from apps.core.services import log_activity
+            from apps.core.models import ActivityLog
+            log_activity(
+                user=request.user,
+                action=ActivityLog.ACTION_DELETE,
+                description=f"Deleted Standard Field '{name}' ({code_name})",
+                details={"field_id": pk_val, "name": code_name},
+                request=request,
+            )
             messages.success(request, f"Field '{name}' deleted.")
         except ProtectedError as e:
             messages.error(request, str(e).split("set()")[0].strip().rstrip(","))
@@ -70,6 +103,16 @@ class FieldToggleActiveView(LoginRequiredMixin, StaffOrAdminMixin, View):
         field = get_object_or_404(StandardMasterField, pk=pk)
         field.is_active = not field.is_active
         field.save(update_fields=["is_active"])
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=request.user,
+            action=ActivityLog.ACTION_UPDATE,
+            description=f"Toggled Standard Field '{field.display_name}' active={field.is_active}",
+            target=field,
+            details={"is_active": field.is_active},
+            request=request,
+        )
         return redirect(reverse("field_templates:field_list"))
 
 
@@ -78,37 +121,17 @@ class FieldToggleDisplayedView(LoginRequiredMixin, StaffOrAdminMixin, View):
         field = get_object_or_404(StandardMasterField, pk=pk)
         field.is_displayed = not field.is_displayed
         field.save(update_fields=["is_displayed"])
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=request.user,
+            action=ActivityLog.ACTION_UPDATE,
+            description=f"Toggled Standard Field '{field.display_name}' displayed={field.is_displayed}",
+            target=field,
+            details={"is_displayed": field.is_displayed},
+            request=request,
+        )
         return redirect(reverse("field_templates:field_list"))
-
-
-class FieldAliasView(LoginRequiredMixin, StaffOrAdminMixin, View):
-    """Manage aliases for a StandardMasterField using an inline formset."""
-
-    template_name = "field_templates/field_aliases.html"
-
-    def get(self, request, pk):
-        from django.shortcuts import render
-        field = get_object_or_404(StandardMasterField, pk=pk)
-        formset = FieldAliasFormSet(instance=field)
-        return render(request, self.template_name, {"field": field, "formset": formset})
-
-    def post(self, request, pk):
-        from django.db import IntegrityError
-        from django.shortcuts import render
-        field = get_object_or_404(StandardMasterField, pk=pk)
-        formset = FieldAliasFormSet(request.POST, instance=field)
-        if formset.is_valid():
-            try:
-                formset.save()
-                messages.success(request, "Aliases saved.")
-                return redirect(reverse("field_templates:field_aliases", kwargs={"pk": pk}))
-            except IntegrityError:
-                messages.error(
-                    request,
-                    "One or more aliases duplicate an existing alias after normalization. "
-                    "Please check for similar entries and try again.",
-                )
-        return render(request, self.template_name, {"field": field, "formset": formset})
 
 
 # ── Templates ─────────────────────────────────────────────────────────────────
@@ -152,6 +175,16 @@ class TemplateCreateView(LoginRequiredMixin, StaffOrAdminMixin, CreateView):
             is_active=True,
             created_by=self.request.user,
         )
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=self.request.user,
+            action=ActivityLog.ACTION_CREATE,
+            description=f"Created Template '{self.object.name}' (scope={self.object.scope})",
+            target=self.object,
+            details={"scope": self.object.scope, "distributor_id": self.object.distributor_id},
+            request=self.request,
+        )
         messages.success(self.request, "Template created. Now add field mappings.")
         return redirect(reverse("field_templates:version_mappings", kwargs={"pk": version.pk}))
 
@@ -176,19 +209,40 @@ class TemplateEditView(LoginRequiredMixin, StaffOrAdminMixin, UpdateView):
         return reverse("field_templates:template_detail", kwargs={"pk": self.object.pk})
 
     def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=self.request.user,
+            action=ActivityLog.ACTION_UPDATE,
+            description=f"Updated Template '{self.object.name}'",
+            target=self.object,
+            details={"changed_fields": list(form.changed_data)},
+            request=self.request,
+        )
         messages.success(self.request, "Template updated.")
-        return super().form_valid(form)
+        return response
 
 
 class TemplateDeleteView(LoginRequiredMixin, StaffOrAdminMixin, View):
     def post(self, request, pk):
         template = get_object_or_404(Template, pk=pk)
         name = template.name
+        pk_val = template.pk
         # Check if any version is in use
         if template.versions.filter(processing_runs__isnull=False).exists():
             messages.error(request, f"Cannot delete '{name}': one or more versions are used in processing runs.")
             return redirect(reverse("field_templates:template_detail", kwargs={"pk": pk}))
         template.delete()
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=request.user,
+            action=ActivityLog.ACTION_DELETE,
+            description=f"Deleted Template '{name}'",
+            details={"template_id": pk_val, "name": name},
+            request=request,
+        )
         messages.success(request, f"Template '{name}' deleted.")
         return redirect(reverse_lazy("field_templates:template_list"))
 
@@ -197,11 +251,22 @@ class VersionDeleteView(LoginRequiredMixin, StaffOrAdminMixin, View):
     def post(self, request, pk):
         version = get_object_or_404(TemplateVersion, pk=pk)
         template_pk = version.template_id
+        template_name = version.template.name
+        version_num = version.version_number
         if version.is_in_use:
             messages.error(request, f"Cannot delete v{version.version_number}: it is used in processing runs.")
             return redirect(reverse("field_templates:version_detail", kwargs={"pk": pk}))
         version.delete()
-        messages.success(request, f"Version {version.version_number} deleted.")
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=request.user,
+            action=ActivityLog.ACTION_DELETE,
+            description=f"Deleted Template '{template_name}' version {version_num}",
+            details={"template_id": template_pk, "version": version_num},
+            request=request,
+        )
+        messages.success(request, f"Version {version_num} deleted.")
         return redirect(reverse("field_templates:template_detail", kwargs={"pk": template_pk}))
 
 
@@ -228,6 +293,16 @@ class TemplateNewVersionView(LoginRequiredMixin, StaffOrAdminMixin, View):
                     standard_field=mapping.standard_field,
                     source_column=mapping.source_column,
                 )
+        from apps.core.services import log_activity
+        from apps.core.models import ActivityLog
+        log_activity(
+            user=request.user,
+            action=ActivityLog.ACTION_CREATE,
+            description=f"Created new version v{new_number} for Template '{template.name}'",
+            target=new_version,
+            details={"template_id": template.pk, "version": new_number},
+            request=request,
+        )
         messages.success(request, f"Version {new_number} created.")
         return redirect(reverse("field_templates:version_mappings", kwargs={"pk": new_version.pk}))
 
@@ -240,51 +315,108 @@ class VersionDetailView(LoginRequiredMixin, StaffOrAdminMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["mappings"] = self.object.field_mappings.select_related("standard_field")
+        ctx["header_mappings"] = self.object.header_mappings.select_related("standard_field")
         return ctx
 
 
 class VersionMappingsView(LoginRequiredMixin, StaffOrAdminMixin, View):
-    """Manage TemplateFieldMappings for a version using an inline formset."""
+    """Manage Table Column Mappings + Header Field Mappings for a version."""
 
     template_name = "field_templates/version_mappings.html"
 
     def _get_version(self, pk):
         return get_object_or_404(TemplateVersion, pk=pk)
 
-    def _ctx(self, version, formset):
-        from django.shortcuts import render
+    def _ctx(self, version, formset, header_formset):
         return {
             "version": version,
             "formset": formset,
+            "header_formset": header_formset,
             "standard_fields": StandardMasterField.objects.order_by("order", "name"),
         }
+
+    def _auto_clone_if_in_use(self, version, request):
+        """If version is in use, clone it to a new version and redirect."""
+        if not version.is_in_use:
+            return None  # No clone needed
+
+        from .models import TemplateFieldMapping, HeaderFieldMapping
+        new_number = version.template.versions.order_by("-version_number").first().version_number + 1
+        new_version = TemplateVersion.objects.create(
+            template=version.template,
+            version_number=new_number,
+            is_active=True,
+            created_by=request.user,
+            notes=f"Auto-cloned from v{version.version_number} for editing",
+        )
+        # Clone table mappings
+        for m in version.field_mappings.all():
+            TemplateFieldMapping.objects.create(
+                template_version=new_version,
+                standard_field=m.standard_field,
+                source_column=m.source_column,
+            )
+        # Clone header mappings
+        for hm in version.header_mappings.all():
+            HeaderFieldMapping.objects.create(
+                template_version=new_version,
+                standard_field=hm.standard_field,
+                label=hm.label,
+            )
+        messages.info(
+            request,
+            f"Version {version.version_number} is in use. "
+            f"Created new version v{new_number} for editing.",
+        )
+        return new_version
 
     def get(self, request, pk):
         from django.shortcuts import render
         version = self._get_version(pk)
-        if version.is_in_use:
-            messages.warning(
-                request,
-                "This version is in use and cannot be edited. Create a new version instead.",
-            )
-            return redirect(reverse("field_templates:version_detail", kwargs={"pk": pk}))
+        new_version = self._auto_clone_if_in_use(version, request)
+        if new_version:
+            return redirect(reverse("field_templates:version_mappings", kwargs={"pk": new_version.pk}))
         formset = TemplateFieldMappingFormSet(instance=version)
-        return render(request, self.template_name, self._ctx(version, formset))
+        header_formset = HeaderFieldMappingFormSet(instance=version, prefix="header")
+        return render(request, self.template_name, self._ctx(version, formset, header_formset))
 
     def post(self, request, pk):
         from django.shortcuts import render
         version = self._get_version(pk)
         if version.is_in_use:
-            messages.error(request, "Cannot edit a version that is in use.")
+            messages.error(request, "Cannot save to a version that is in use. Edit the new version instead.")
             return redirect(reverse("field_templates:version_detail", kwargs={"pk": pk}))
+
         formset = TemplateFieldMappingFormSet(request.POST, instance=version)
-        if formset.is_valid():
+        header_formset = HeaderFieldMappingFormSet(request.POST, instance=version, prefix="header")
+
+        if formset.is_valid() and header_formset.is_valid():
             formset.save()
+            header_formset.save()
+
+            from apps.core.services import log_activity
+            from apps.core.models import ActivityLog
+            table_mappings = [
+                {"field": m.standard_field.name, "source": m.source_column}
+                for m in version.field_mappings.all()
+            ]
+            header_mappings = [
+                {"field": m.standard_field.name, "label": m.label}
+                for m in version.header_mappings.all()
+            ]
+            log_activity(
+                user=request.user,
+                action=ActivityLog.ACTION_UPDATE,
+                description=f"Updated mappings for Template '{version.template.name}' v{version.version_number}",
+                target=version,
+                details={"table_mappings": table_mappings, "header_mappings": header_mappings},
+                request=request,
+            )
             messages.success(request, "Mappings saved.")
             return redirect(
                 reverse("field_templates:template_detail", kwargs={"pk": version.template_id})
             )
-        return render(request, self.template_name, self._ctx(version, formset))
+        return render(request, self.template_name, self._ctx(version, formset, header_formset))
 
 
 class FieldTemplateDownloadView(LoginRequiredMixin, StaffOrAdminMixin, View):

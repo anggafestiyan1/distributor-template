@@ -20,6 +20,16 @@
         {% endif %}
       </ul>
     </div>
+    {% if product_master_name %}
+    <div class="card mt-3">
+      <div class="card-header">Product (Master)</div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item"><strong>Product Name:</strong> {{ product_master_name }}</li>
+        <li class="list-group-item"><strong>SKU:</strong> <code>{{ product_master_sku }}</code></li>
+      </ul>
+    </div>
+    {% endif %}
+    </div>
   </div>
   <div class="col-md-8">
     <div class="card">

@@ -1,15 +1,8 @@
 from django.contrib import admin
 from .models import (
-    StandardMasterField, FieldAlias,
+    StandardMasterField,
     Template, TemplateVersion, TemplateFieldMapping,
 )
-
-
-class FieldAliasInline(admin.TabularInline):
-    model = FieldAlias
-    extra = 1
-    fields = ["alias_original", "alias_normalized"]
-    readonly_fields = ["alias_normalized"]
 
 
 @admin.register(StandardMasterField)
@@ -17,7 +10,6 @@ class StandardMasterFieldAdmin(admin.ModelAdmin):
     list_display = ["name", "display_name", "data_type", "is_displayed", "is_active", "order"]
     list_filter = ["data_type", "is_displayed", "is_active"]
     search_fields = ["name", "display_name"]
-    inlines = [FieldAliasInline]
     ordering = ["order", "name"]
 
 

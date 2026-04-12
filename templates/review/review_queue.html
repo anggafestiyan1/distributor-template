@@ -9,11 +9,31 @@
   </div>
 </div>
 
+<!-- Filter -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center">
+      <div class="col-sm-4 col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          {% for val, label in status_filter_choices %}
+            <option value="{{ val }}" {% if selected_status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+        <a href="{% url 'review:queue' %}" class="btn btn-sm btn-link text-decoration-none text-muted">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="table-scroll">
     <table class="table table-sm table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
+          <th>Review ID</th>
           <th>Batch</th>
           <th>Distributor</th>
           <th>Template</th>
@@ -21,6 +41,7 @@
           <th>Approved</th>
           <th>Rejected</th>
           <th>Pending</th>
+          <th>Problem</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -29,6 +50,7 @@
         {% for run in runs %}
         {% with s=run.review_summary %}
         <tr>
+          <td><code class="fw-bold">{{ run.batch.review_code }}</code></td>
           <td>
             <a href="{% url 'uploads:batch_detail' run.batch.pk %}" class="fw-medium text-decoration-none">
               {{ run.batch.original_filename|truncatechars:32 }}
@@ -45,6 +67,13 @@
           <td><span class="badge bg-danger">{{ s.rejected }}</span></td>
           <td><span class="badge bg-secondary">{{ s.pending }}</span></td>
           <td>
+            {% if s.problem > 0 %}
+              <span class="badge bg-warning text-dark">{{ s.problem }}</span>
+            {% else %}
+              <span class="text-muted">0</span>
+            {% endif %}
+          </td>
+          <td>
             <span class="badge bg-{{ run.approval_badge_class }}">
               {{ run.approval_status|title }}
             </span>
@@ -58,7 +87,7 @@
         {% endwith %}
         {% empty %}
         <tr>
-          <td colspan="9">
+          <td colspan="11">
             <div class="empty-state">
               <i class="bi bi-clipboard-check"></i>
               <p class="empty-title">Review queue is empty</p>

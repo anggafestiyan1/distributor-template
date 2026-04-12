@@ -73,30 +73,28 @@ def score_template_version(
         )
 
     headers_set = set(normalized_headers)
-    matched: list[str] = []
-    unmatched: list[str] = []
+    matched_fields: set[str] = set()
+    unmatched_fields: set[str] = set()
 
     for mapping in mappings:
         sf = mapping.standard_field
+        if sf.name in matched_fields:
+            continue  # Already matched by another mapping (alias) for same field
 
-        # Check direct match
         is_matched = mapping.source_column_normalized in headers_set
 
-        # Check alias match
-        if not is_matched:
-            field_id = sf.pk
-            is_matched = any(
-                alias_norm for alias_norm, fid in alias_lookup.items()
-                if fid == field_id and alias_norm in headers_set
-            )
-
         if is_matched:
-            matched.append(sf.name)
-        else:
-            unmatched.append(sf.name)
+            matched_fields.add(sf.name)
+            unmatched_fields.discard(sf.name)
+        elif sf.name not in matched_fields:
+            unmatched_fields.add(sf.name)
 
-    total_fields = len(mappings)
-    score = len(matched) / total_fields if total_fields > 0 else 0.0
+    matched = list(matched_fields)
+    unmatched = list(unmatched_fields)
+    # Score = unique matched fields / unique fields in template
+    unique_fields = matched_fields | unmatched_fields
+    total_fields = len(unique_fields)
+    score = len(matched_fields) / total_fields if total_fields > 0 else 0.0
 
     reason = _build_reason(score, [], matched, total_fields)
 

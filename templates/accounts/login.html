@@ -24,22 +24,40 @@
             {% csrf_token %}
             <div class="mb-3">
               <label class="form-label fw-semibold">Username</label>
-              <input type="text" name="username" class="form-control" autofocus required>
+              <input type="text" name="username" id="id_username" class="form-control" autofocus required>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">Password</label>
-              <input type="password" name="password" class="form-control" required>
+              <input type="password" name="password" id="id_password" class="form-control" required>
             </div>
             <input type="hidden" name="next" value="{{ next }}">
             <div class="d-grid">
               <button type="submit" class="btn btn-primary">Sign In</button>
             </div>
           </form>
+
+          <!-- Dev credentials — click to auto-fill -->
+          <div class="mt-4 pt-3 border-top">
+            <div class="small text-muted mb-2">Quick login (click to fill):</div>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary w-100 text-start"
+                    onclick="fillLogin('admin', 'admin123')">
+              <i class="bi bi-shield-lock me-1"></i>
+              <strong>admin</strong> / admin123
+              <span class="badge bg-primary ms-1">Admin</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function fillLogin(username, password) {
+  document.getElementById('id_username').value = username;
+  document.getElementById('id_password').value = password;
+}
+</script>
 </body>
 </html>

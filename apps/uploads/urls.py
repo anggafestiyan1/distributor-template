@@ -10,4 +10,5 @@ urlpatterns = [
     path("<int:pk>/status/", views.BatchStatusView.as_view(), name="batch_status"),
     path("<int:pk>/reprocess/", views.BatchReprocessView.as_view(), name="batch_reprocess"),
     path("<int:pk>/delete/", views.BatchDeleteView.as_view(), name="batch_delete"),
+    path("<int:pk>/quick-reprocess/", views.BatchQuickReprocessView.as_view(), name="batch_quick_reprocess"),
 ]

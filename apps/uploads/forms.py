@@ -6,13 +6,31 @@ from django.conf import settings
 ALLOWED_EXTENSIONS = getattr(settings, "ALLOWED_UPLOAD_EXTENSIONS", [".xlsx", ".csv"])
 
 
+class MultiFileInput(forms.ClearableFileInput):
+    """File input that allows selecting multiple files."""
+    allow_multiple_selected = True
+
+
+class MultiFileField(forms.FileField):
+    """FileField that accepts multiple files."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultiFileInput(attrs={"multiple": True}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        if isinstance(data, (list, tuple)):
+            return [super(MultiFileField, self).clean(d, initial) for d in data]
+        return [super().clean(data, initial)]
+
+
 class UploadBatchForm(forms.Form):
     distributor = forms.ModelChoiceField(
         queryset=None,
         empty_label="Select distributor...",
     )
-    file = forms.FileField(
-        help_text=f"Allowed formats: {', '.join(ALLOWED_EXTENSIONS)}. Max 50 MB.",
+    files = MultiFileField(
+        label="Files",
+        help_text=f"Allowed formats: {', '.join(ALLOWED_EXTENSIONS)}. Max 50 MB per file. You can select multiple files.",
     )
 
     def __init__(self, *args, **kwargs):
@@ -31,19 +49,24 @@ class UploadBatchForm(forms.Form):
                     self.fields["distributor"].initial = assigned[0]
                     self.fields["distributor"].widget = forms.HiddenInput()
 
-    def clean_file(self):
-        uploaded = self.cleaned_data["file"]
-        ext = os.path.splitext(uploaded.name)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise forms.ValidationError(
-                f"File type '{ext}' is not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-            )
+    def clean_files(self):
+        uploaded_files = self.cleaned_data["files"]
+        if not uploaded_files:
+            raise forms.ValidationError("Please select at least one file.")
+
         max_size = getattr(settings, "FILE_UPLOAD_MAX_MEMORY_SIZE", 52428800)
-        if uploaded.size > max_size:
-            raise forms.ValidationError(
-                f"File too large. Maximum size is {max_size // (1024*1024)} MB."
-            )
-        return uploaded
+        for uploaded in uploaded_files:
+            ext = os.path.splitext(uploaded.name)[1].lower()
+            if ext not in ALLOWED_EXTENSIONS:
+                raise forms.ValidationError(
+                    f"File '{uploaded.name}': type '{ext}' not allowed. "
+                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                )
+            if uploaded.size > max_size:
+                raise forms.ValidationError(
+                    f"File '{uploaded.name}' too large. Maximum size is {max_size // (1024*1024)} MB."
+                )
+        return uploaded_files
 
 
 class ReprocessForm(forms.Form):

@@ -7,25 +7,63 @@
     Back to Template
   </a>
 </div>
+
 {% if version.is_in_use %}
-<div class="alert alert-warning">This version is in use and cannot be edited. Create a new version to make changes.</div>
+<div class="alert alert-warning">
+  This version is in use. Editing will auto-create a new version with your changes.
+  <a href="{% url 'field_templates:version_mappings' version.pk %}" class="btn btn-sm btn-primary ms-2">Edit Mappings</a>
+</div>
 {% else %}
 <a href="{% url 'field_templates:version_mappings' version.pk %}" class="btn btn-sm btn-primary mb-3">Edit Mappings</a>
 {% endif %}
-<div class="table-responsive">
-  <table class="table table-sm table-hover">
-    <thead class="table-light"><tr><th>Standard Field</th><th>Source Column</th><th>Normalized</th></tr></thead>
-    <tbody>
-      {% for m in mappings %}
-      <tr>
-        <td><code>{{ m.standard_field.name }}</code></td>
-        <td>{{ m.source_column }}</td>
-        <td class="text-muted small"><code>{{ m.source_column_normalized }}</code></td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="3" class="text-muted text-center">No mappings.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+
+<!-- Table Column Mappings -->
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-table me-1"></i> Table Column Mappings
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Standard Field</th><th>Source Column</th><th>Normalized</th></tr>
+      </thead>
+      <tbody>
+        {% for m in mappings %}
+        <tr>
+          <td><code>{{ m.standard_field.name }}</code></td>
+          <td>{{ m.source_column }}</td>
+          <td class="text-muted small"><code>{{ m.source_column_normalized }}</code></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="text-muted text-center py-3">No table mappings.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
+
+<!-- Header Field Mappings -->
+{% if header_mappings %}
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-file-earmark-text me-1"></i> Header Field Mappings
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Standard Field</th><th>Label (in PDF header)</th></tr>
+      </thead>
+      <tbody>
+        {% for hm in header_mappings %}
+        <tr>
+          <td><code>{{ hm.standard_field.name }}</code></td>
+          <td>{{ hm.label }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

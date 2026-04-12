@@ -32,7 +32,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS: list[str] = []
 
 LOCAL_APPS = [
-    "apps.core",
+    "apps.core.apps.CoreConfig",
     "apps.accounts.apps.AccountsConfig",
     "apps.distributors.apps.DistributorsConfig",
     "apps.field_templates.apps.FieldTemplatesConfig",
@@ -127,7 +127,7 @@ CELERY_TASK_TRACK_STARTED = True
 # ── Upload settings ───────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
-ALLOWED_UPLOAD_EXTENSIONS = [".xlsx", ".csv", ".pdf"]
+ALLOWED_UPLOAD_EXTENSIONS = [".xlsx", ".csv", ".pdf", ".jpg", ".jpeg", ".png"]
 
 # ── Template matching ─────────────────────────────────────────────────────────
 TEMPLATE_MATCH_MIN_SCORE = 0.5  # 50 % required fields must match

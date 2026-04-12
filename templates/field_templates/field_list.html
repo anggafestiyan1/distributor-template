@@ -20,7 +20,6 @@
           <th>Type</th>
           <th>Display</th>
           <th>Active</th>
-          <th>Aliases</th>
           <th></th>
         </tr>
       </thead>
@@ -72,16 +71,8 @@
           </td>
 
           <td>
-            <a href="{% url 'field_templates:field_aliases' f.pk %}" class="text-decoration-none">
-              <span class="badge bg-light text-dark border">
-                <i class="bi bi-tag me-1"></i>{{ f.aliases.count }}
-              </span>
-            </a>
-          </td>
-          <td>
             <div class="d-flex gap-1">
               <a href="{% url 'field_templates:field_edit' f.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
-              <a href="{% url 'field_templates:field_aliases' f.pk %}" class="btn btn-sm btn-outline-primary">Aliases</a>
               {% if f.has_master_data %}
                 <button class="btn btn-sm btn-outline-danger" disabled
                         title="Cannot delete: master data records use this field. Hide it with the Active toggle instead.">

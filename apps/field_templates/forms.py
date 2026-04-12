@@ -1,9 +1,8 @@
 from django import forms
-from django.forms import BaseInlineFormSet, inlineformset_factory
+from django.forms import inlineformset_factory
 
-from apps.field_templates.services.normalization import normalize_header
 from .models import (
-    FieldAlias, StandardMasterField,
+    HeaderFieldMapping, StandardMasterField,
     Template, TemplateFieldMapping, TemplateVersion,
 )
 
@@ -13,44 +12,6 @@ class StandardMasterFieldForm(forms.ModelForm):
         model = StandardMasterField
         fields = ["name", "display_name", "data_type", "is_displayed", "batch_context_source", "order", "description"]
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
-
-
-class FieldAliasForm(forms.ModelForm):
-    class Meta:
-        model = FieldAlias
-        fields = ["alias_original"]
-
-
-class BaseFieldAliasFormSet(BaseInlineFormSet):
-    """Validate that no two aliases normalize to the same value for this field."""
-
-    def clean(self):
-        super().clean()
-        seen = {}
-        for form in self.forms:
-            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
-                continue
-            raw = form.cleaned_data.get("alias_original", "").strip()
-            if not raw:
-                continue
-            normalized = normalize_header(raw)
-            if normalized in seen:
-                raise forms.ValidationError(
-                    f'Duplicate alias: "{raw}" normalizes to "{normalized}", '
-                    f'same as "{seen[normalized]}".'
-                )
-            seen[normalized] = raw
-
-
-FieldAliasFormSet = inlineformset_factory(
-    StandardMasterField,
-    FieldAlias,
-    form=FieldAliasForm,
-    formset=BaseFieldAliasFormSet,
-    extra=0,
-    can_delete=True,
-    fields=["alias_original"],
-)
 
 
 class TemplateForm(forms.ModelForm):
@@ -90,4 +51,20 @@ TemplateFieldMappingFormSet = inlineformset_factory(
     extra=0,
     can_delete=True,
     fields=["standard_field", "source_column"],
+)
+
+
+class HeaderFieldMappingForm(forms.ModelForm):
+    class Meta:
+        model = HeaderFieldMapping
+        fields = ["standard_field", "label"]
+
+
+HeaderFieldMappingFormSet = inlineformset_factory(
+    TemplateVersion,
+    HeaderFieldMapping,
+    form=HeaderFieldMappingForm,
+    extra=0,
+    can_delete=True,
+    fields=["standard_field", "label"],
 )

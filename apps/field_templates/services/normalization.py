@@ -62,25 +62,17 @@ def normalize_headers_list(headers: list[str]) -> dict[str, str]:
 
 
 def build_alias_lookup(standard_fields=None) -> dict[str, int]:
-    """Build a {normalized_alias: standard_field_id} lookup dict.
+    """Build a {normalized_name: standard_field_id} lookup from field names/display_names.
 
-    Loads all FieldAlias records (and the field name itself) into memory
-    for O(1) alias resolution during processing.
-
-    Args:
-        standard_fields: Optional queryset; if None, loads all fields.
-
-    Returns:
-        Dict mapping normalized alias strings to StandardMasterField PKs.
+    Used BEFORE template matching (no template-specific mappings yet).
+    After template match, the template's own mappings provide the complete alias set.
     """
-    from apps.field_templates.models import FieldAlias, StandardMasterField
+    from apps.field_templates.models import StandardMasterField
 
     if standard_fields is None:
         standard_fields = StandardMasterField.objects.all()
 
     lookup: dict[str, int] = {}
-
-    # Include the field's own name as an alias
     for field in standard_fields:
         norm = normalize_header(field.name)
         lookup[norm] = field.pk
@@ -88,13 +80,17 @@ def build_alias_lookup(standard_fields=None) -> dict[str, int]:
         if norm_display and norm_display not in lookup:
             lookup[norm_display] = field.pk
 
-    # Include all explicit aliases
-    aliases = FieldAlias.objects.filter(
-        standard_field__in=standard_fields
-    ).values_list("alias_normalized", "standard_field_id")
+    return lookup
 
-    for alias_norm, field_id in aliases:
-        if alias_norm:
-            lookup[alias_norm] = field_id
 
+def build_alias_lookup_from_mappings(mappings) -> dict[str, int]:
+    """Build {normalized_source_column: standard_field_id} from template mappings.
+
+    Used AFTER template match for row mapping. Each mapping's source_column
+    acts as an alias for the standard field.
+    """
+    lookup: dict[str, int] = {}
+    for m in mappings:
+        if m.source_column_normalized:
+            lookup[m.source_column_normalized] = m.standard_field_id
     return lookup

@@ -29,7 +29,7 @@ def run_processing_pipeline(batch_id: int) -> None:
     from apps.field_templates.services.normalization import normalize_headers_list, build_alias_lookup
     from apps.field_templates.services.matching import find_best_template
     from apps.field_templates.models import StandardMasterField
-    from .parser import parse_file, compute_file_checksum
+    from .parsers import parse_file, compute_file_checksum
     from .validator import (
         validate_file, validate_template_match, validate_row, validate_business,
         compute_row_status, compute_business_key,
@@ -76,7 +76,7 @@ def _execute_pipeline(batch, run) -> None:
     from apps.field_templates.services.normalization import normalize_headers_list, build_alias_lookup
     from apps.field_templates.services.matching import find_best_template
     from apps.field_templates.models import StandardMasterField
-    from .parser import parse_file, compute_file_checksum
+    from .parsers import parse_file, compute_file_checksum
     from .validator import (
         validate_file, validate_template_match, validate_row, validate_business,
         compute_row_status, compute_business_key,
@@ -88,7 +88,7 @@ def _execute_pipeline(batch, run) -> None:
     file_path = os.path.join(django_settings.MEDIA_ROOT, batch.file_path)
 
     # ── 3. Parse file ─────────────────────────────────────────────────────────
-    parse_result = parse_file(file_path, batch.original_filename)
+    parse_result = parse_file(file_path, batch.original_filename, distributor_code=batch.distributor.code)
 
     file_issues = validate_file(
         parse_result.parse_errors,
@@ -141,9 +141,33 @@ def _execute_pipeline(batch, run) -> None:
     # ── 6. Build template mapping lookup ─────────────────────────────────────
     mappings = list(template_version.field_mappings.select_related("standard_field"))
     standard_fields_by_id = {sf.pk: sf for sf in standard_fields}
+    # Build alias lookup from template mappings (not from global FieldAlias)
+    from apps.field_templates.services.normalization import build_alias_lookup_from_mappings
+    mapping_alias_lookup = build_alias_lookup_from_mappings(mappings)
+
+    # ── 6b. Extract header fields using label-based mappings ─────────────────
+    header_field_data = {}
+    header_mappings = list(template_version.header_mappings.select_related("standard_field"))
+    if header_mappings:
+        label_field_map = {hm.label: hm.standard_field.name for hm in header_mappings}
+        # Get raw text from first page (for PDF) or from metadata
+        raw_text = ""
+        if parse_result.metadata.get("_raw_first_page_text"):
+            raw_text = parse_result.metadata["_raw_first_page_text"]
+        elif file_path.lower().endswith(".pdf"):
+            try:
+                import pdfplumber
+                with pdfplumber.open(file_path) as pdf:
+                    raw_text = pdf.pages[0].extract_text() or ""
+            except Exception:
+                pass
+        if raw_text:
+            from .parsers.helpers.metadata import extract_header_fields_from_text
+            header_field_data = extract_header_fields_from_text(raw_text, label_field_map)
+            logger.info("Header fields extracted: %s", header_field_data)
 
     # ── 7. Process rows ───────────────────────────────────────────────────────
-    from .parser import compute_row_checksum
+    from .parsers import compute_row_checksum
 
     all_import_rows = []
 
@@ -152,6 +176,10 @@ def _execute_pipeline(batch, run) -> None:
         mapped_data = _map_row(raw_row, header_map, mappings, alias_lookup, standard_fields_by_id)
         _inject_batch_context(mapped_data, batch, standard_fields_by_id)
         _inject_pdf_metadata(mapped_data, parse_result.metadata, standard_fields_by_id)
+        # Inject label-based header fields (from HeaderFieldMapping)
+        for field_name, value in header_field_data.items():
+            if field_name not in mapped_data:
+                mapped_data[field_name] = value
         business_key = compute_business_key(mapped_data, batch.distributor.code)
 
         # Row-level validation
@@ -219,19 +247,17 @@ def _execute_pipeline(batch, run) -> None:
 
 def _map_row(
     raw_row: dict,
-    header_map: dict[str, str],   # {raw_header: normalized_header}
-    mappings: list,                 # list of TemplateFieldMapping
-    alias_lookup: dict[str, int],  # {normalized_alias: standard_field_id}
+    header_map: dict[str, str],
+    mappings: list,
+    alias_lookup: dict[str, int],
     standard_fields_by_id: dict[int, object],
 ) -> dict:
-    """Map raw row values to standard field names.
+    """Map raw row values to standard field names using template mappings.
 
-    Pass 1: Template-driven — source_column_normalized or alias for each TemplateFieldMapping.
-    Pass 2: Alias-driven fallback — for standard fields not covered by the template,
-            check if any file column matches a field alias. This allows fields like
-            'date' to be populated via alias even without an explicit template mapping.
+    Each TemplateFieldMapping defines a source_column → standard_field mapping.
+    Multiple mappings per field are supported (aliases).
+    First match wins — subsequent mappings for same field are skipped.
     """
-    # Build {normalized_header: raw_value} for this row
     normalized_row: dict[str, str] = {}
     for raw_header, raw_value in raw_row.items():
         norm = header_map.get(raw_header, "")
@@ -241,38 +267,15 @@ def _map_row(
     result: dict[str, str] = {}
     mapped_field_ids: set[int] = set()
 
-    # Pass 1: Template field mappings
+    # Match via template mappings (includes aliases as additional rows)
     for mapping in mappings:
         sf = mapping.standard_field
-        value: str | None = None
+        if sf.pk in mapped_field_ids:
+            continue  # Already mapped by a previous mapping for this field
 
-        # 1a. Direct match via template source_column
         if mapping.source_column_normalized in normalized_row:
-            value = normalized_row[mapping.source_column_normalized]
-
-        # 1b. Alias match for this field
-        if value is None:
-            for alias_norm, field_id in alias_lookup.items():
-                if field_id == sf.pk and alias_norm in normalized_row:
-                    value = normalized_row[alias_norm]
-                    break
-
-        if value is not None:
-            result[sf.name] = value
+            result[sf.name] = normalized_row[mapping.source_column_normalized]
             mapped_field_ids.add(sf.pk)
-
-    # Pass 2: Alias-driven fallback for fields not covered by the template.
-    # If a file column matches any alias (including the field's own name) for a
-    # standard field that the template didn't map, still populate it.
-    for alias_norm, field_id in alias_lookup.items():
-        if field_id in mapped_field_ids:
-            continue
-        sf = standard_fields_by_id.get(field_id)
-        if sf is None:
-            continue
-        if alias_norm in normalized_row:
-            result[sf.name] = normalized_row[alias_norm]
-            mapped_field_ids.add(field_id)
 
     return result
 

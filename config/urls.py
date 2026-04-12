@@ -14,6 +14,7 @@ urlpatterns = [
     path("review/", include("apps.review.urls", namespace="review")),
     path("master-data/", include("apps.master_data.urls", namespace="master_data")),
     path("warehouse/", include("apps.warehouse.urls", namespace="warehouse")),
+    path("core/", include("apps.core.urls", namespace="core")),
     path("dashboard/", include("apps.dashboard.urls", namespace="dashboard")),
     path("", RedirectView.as_view(url="/dashboard/", permanent=False)),
     path("health/", include("apps.dashboard.health_urls")),

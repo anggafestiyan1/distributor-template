@@ -15,10 +15,10 @@
               {{ form.distributor }}
             </div>
             <div class="mb-3">
-              <label class="form-label fw-semibold">{{ form.file.label }}</label>
-              {{ form.file }}
-              {% if form.file.errors %}<div class="text-danger small">{{ form.file.errors }}</div>{% endif %}
-              {% if form.file.help_text %}<div class="form-text">{{ form.file.help_text }}</div>{% endif %}
+              <label class="form-label fw-semibold">{{ form.files.label }}</label>
+              {{ form.files }}
+              {% if form.files.errors %}<div class="text-danger small">{{ form.files.errors }}</div>{% endif %}
+              {% if form.files.help_text %}<div class="form-text">{{ form.files.help_text }}</div>{% endif %}
             </div>
           {% else %}
             {% for field in form %}

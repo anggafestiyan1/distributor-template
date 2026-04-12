@@ -84,7 +84,7 @@
       <li>
         <span class="info-label">Match Score</span>
         <span class="info-value">
-          {% if latest_run.match_score %}{{ latest_run.match_score|floatformat:0 }}%{% else %}—{% endif %}
+          {% if latest_run.match_score %}{% widthratio latest_run.match_score 1 100 %}%{% else %}—{% endif %}
         </span>
       </li>
       <li>

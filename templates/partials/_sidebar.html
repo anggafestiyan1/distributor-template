@@ -9,28 +9,35 @@
         </a>
       </li>
 
-      <li class="nav-item">
+      <li class="nav-item mt-1">
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Main</span>
+      </li>
+      <li class="nav-item sidebar-subitem">
         <a class="nav-link {% if request.resolver_match.namespace == 'uploads' %}active{% endif %}"
            href="{% url 'uploads:batch_list' %}">
           <i class="bi bi-cloud-upload"></i> Uploads
         </a>
       </li>
-
-      <li class="nav-item">
+      <li class="nav-item sidebar-subitem">
         <a class="nav-link {% if request.resolver_match.namespace == 'review' %}active{% endif %}"
            href="{% url 'review:queue' %}">
           <i class="bi bi-clipboard-check"></i> Review
         </a>
       </li>
-
-      <li class="nav-item">
+      <li class="nav-item sidebar-subitem">
         <a class="nav-link {% if request.resolver_match.namespace == 'master_data' %}active{% endif %}"
            href="{% url 'master_data:record_list' %}">
           <i class="bi bi-database"></i> Master Data
         </a>
       </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'core' and request.resolver_match.url_name == 'main_log' %}active{% endif %}"
+           href="{% url 'core:main_log' %}">
+          <i class="bi bi-clock-history"></i> Log
+        </a>
+      </li>
 
-      <!-- Warehouse -->
       <li class="nav-item mt-1">
         <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">Warehouse</span>
@@ -103,6 +110,12 @@
         <a class="nav-link {% if request.resolver_match.namespace == 'field_templates' and 'field_' not in request.resolver_match.url_name %}active{% endif %}"
            href="{% url 'field_templates:template_list' %}">
           <i class="bi bi-layout-text-window-reverse"></i> Templates
+        </a>
+      </li>
+      <li class="nav-item sidebar-subitem">
+        <a class="nav-link {% if request.resolver_match.namespace == 'core' and request.resolver_match.url_name == 'settings_log' %}active{% endif %}"
+           href="{% url 'core:settings_log' %}">
+          <i class="bi bi-clock-history"></i> Log
         </a>
       </li>
       {% endif %}

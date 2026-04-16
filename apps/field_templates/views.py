@@ -2,7 +2,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
@@ -371,7 +371,6 @@ class VersionMappingsView(LoginRequiredMixin, StaffOrAdminMixin, View):
         return new_version
 
     def get(self, request, pk):
-        from django.shortcuts import render
         version = self._get_version(pk)
         new_version = self._auto_clone_if_in_use(version, request)
         if new_version:
@@ -381,7 +380,6 @@ class VersionMappingsView(LoginRequiredMixin, StaffOrAdminMixin, View):
         return render(request, self.template_name, self._ctx(version, formset, header_formset))
 
     def post(self, request, pk):
-        from django.shortcuts import render
         version = self._get_version(pk)
         if version.is_in_use:
             messages.error(request, "Cannot save to a version that is in use. Edit the new version instead.")

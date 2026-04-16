@@ -1,6 +1,6 @@
 """Helper modules for file parsing."""
 from .merged_cells import split_merged_cells
-from .metadata import extract_pdf_metadata, save_parsed_json
+from .metadata import extract_header_fields_from_text, save_parsed_json
 from .ocr import (
     cluster_words_by_y,
     get_paddle_ocr,
@@ -22,7 +22,7 @@ from .validation import (
 __all__ = [
     "clean_table_result",
     "cluster_words_by_y",
-    "extract_pdf_metadata",
+    "extract_header_fields_from_text",
     "get_paddle_ocr",
     "is_digital_pdf",
     "is_header_repeat",

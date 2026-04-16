@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
 
@@ -47,12 +47,10 @@ class BatchUploadView(LoginRequiredMixin, View):
     template_name = "uploads/batch_upload.html"
 
     def get(self, request):
-        from django.shortcuts import render
         form = UploadBatchForm(user=request.user)
         return render(request, self.template_name, {"form": form})
 
     def post(self, request):
-        from django.shortcuts import render
         form = UploadBatchForm(request.POST, request.FILES, user=request.user)
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
@@ -156,7 +154,6 @@ class BatchStatusView(LoginRequiredMixin, HtmxMixin, View):
     """HTMX polling endpoint — returns partial with current batch status."""
 
     def get(self, request, pk):
-        from django.shortcuts import render
         batch = get_object_or_404(UploadBatch, pk=pk)
         return render(request, "uploads/partials/_processing_status.html", {"batch": batch})
 

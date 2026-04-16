@@ -6,7 +6,6 @@ import re
 
 from .base import BaseParser, ParseResult
 from .helpers.merged_cells import split_merged_cells
-from .helpers.metadata import extract_pdf_metadata
 from .helpers.post_process import clean_table_result, merge_continuation_rows
 from .helpers.validation import (
     is_digital_pdf,
@@ -59,15 +58,12 @@ class PdfDigitalParser(BaseParser):
                     logger.info("PDF text parsing failed, trying OCR as last resort")
                     return self._delegate_to_scan_parser(file_path)
 
-                # Extract metadata (invoice ID, etc.) from PDF header area
-                metadata = extract_pdf_metadata(pdf, self.config)
                 logger.info(
-                    "PDF parsed: %d headers, %d rows, metadata=%s — %s",
-                    len(headers), len(rows), metadata, headers,
+                    "PDF parsed: %d headers, %d rows — %s",
+                    len(headers), len(rows), headers,
                 )
                 return ParseResult(
                     headers=headers, rows=rows, row_count=len(rows),
-                    metadata=metadata,
                 )
 
         except Exception as exc:

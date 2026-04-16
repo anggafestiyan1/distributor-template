@@ -175,7 +175,7 @@ def _execute_pipeline(batch, run) -> None:
         row_checksum = compute_row_checksum(raw_row)
         mapped_data = _map_row(raw_row, header_map, mappings, alias_lookup, standard_fields_by_id)
         _inject_batch_context(mapped_data, batch, standard_fields_by_id)
-        _inject_pdf_metadata(mapped_data, parse_result.metadata, standard_fields_by_id)
+        # Legacy _inject_pdf_metadata removed — Header Field Mappings in Templates handle this now
         # Inject label-based header fields (from HeaderFieldMapping)
         for field_name, value in header_field_data.items():
             if field_name not in mapped_data:
@@ -302,29 +302,6 @@ def _inject_batch_context(mapped_data: dict, batch, standard_fields_by_id: dict)
             pass
 
 
-# Mapping from PDF metadata keys → StandardMasterField names
-_PDF_METADATA_FIELD_MAP = {
-    "invoice_id": "invoice_id",
-}
-
-
-def _inject_pdf_metadata(mapped_data: dict, metadata: dict, standard_fields_by_id: dict) -> None:
-    """Inject PDF header metadata (invoice_id, etc.) into mapped_data.
-
-    Only injects if the corresponding StandardMasterField exists and is active,
-    and the field is not already populated from the file.
-    """
-    if not metadata:
-        return
-    field_names = {sf.name: sf for sf in standard_fields_by_id.values()}
-    for meta_key, field_name in _PDF_METADATA_FIELD_MAP.items():
-        if field_name in mapped_data:
-            continue  # Already populated
-        if field_name not in field_names:
-            continue  # Field doesn't exist in Standard Master Fields
-        val = metadata.get(meta_key)
-        if val:
-            mapped_data[field_name] = str(val)
 
 
 def _fail_batch(batch, run, error_message: str) -> None:

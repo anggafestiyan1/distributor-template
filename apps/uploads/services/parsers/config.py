@@ -24,16 +24,8 @@ class ParserConfig:
         "sub total", "subtotal", "diskon", "discount", "ppn", "pajak", "tax",
         "total", "grand total", "terbilang", "dp", "uang muka", "penerima",
         "gudang", "pengirim", "mengetahui", "keterangan", "halaman",
-        "notes", "discount amount", "total qty",
+        "notes", "discount amount", "total qty", "cash",
     }))
-
-    # ── Invoice metadata regex patterns ─────────────────────────────────────
-    invoice_id_patterns: list[str] = field(default_factory=lambda: [
-        r"Invoice\s*Id\s*[:\-]\s*(.+)",
-        r"Nomor\s*Faktur\s*[:\-]?\s*(.+)",
-        r"No\.?\s*Faktur\s*[:\-]?\s*(.+)",
-        r"Invoice\s*(?:No|Number)\s*[:\-]\s*(.+)",
-    ])
 
     # ── Product name common prefix (for multi-line merge heuristic) ─────────
     product_prefix: str = ""

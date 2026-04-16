@@ -1,4 +1,4 @@
-"""PDF metadata extraction and parsed-JSON persistence."""
+"""Header field extraction (label-based) and parsed-JSON persistence."""
 from __future__ import annotations
 
 import json
@@ -7,82 +7,16 @@ import re
 from pathlib import Path
 
 from ..base import ParseResult
-from ..config import ParserConfig
 
 logger = logging.getLogger(__name__)
-
-# Pre-compiled invoice-ID patterns (module-level cache, built once per config).
-_compiled_patterns_cache: dict[int, list[re.Pattern]] = {}
-
-
-def _get_compiled_patterns(config: ParserConfig) -> list[re.Pattern]:
-    """Return compiled regex patterns for invoice ID extraction."""
-    key = id(config)
-    if key not in _compiled_patterns_cache:
-        _compiled_patterns_cache[key] = [
-            re.compile(p, re.IGNORECASE) for p in config.invoice_id_patterns
-        ]
-    return _compiled_patterns_cache[key]
-
-
-def extract_pdf_metadata(pdf, config: ParserConfig) -> dict:
-    """Extract metadata (invoice ID, date, etc.) from PDF header area.
-
-    Scans the first page's text lines BEFORE the table header for known patterns.
-    """
-    metadata: dict = {}
-    page = pdf.pages[0]
-    text = page.extract_text()
-    if not text:
-        return metadata
-
-    lines = text.split("\n")
-    patterns = _get_compiled_patterns(config)
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-
-        # Stop scanning if we hit the table header
-        tokens = re.split(r'[\s./_%]+', stripped.lower())
-        kw_count = sum(1 for t in tokens if t in config.header_keywords)
-        if kw_count >= 3:
-            break
-
-        # Try invoice ID patterns
-        if "invoice_id" not in metadata:
-            for pattern in patterns:
-                m = pattern.search(stripped)
-                if m:
-                    val = m.group(1).strip()
-                    val = re.split(r'\s{2,}', val)[0].strip()
-                    if val and len(val) < 100:
-                        metadata["invoice_id"] = val
-                        break
-
-    # Fallback: if "Nomor Faktur" was in header but value is on next line
-    # (e.g., Line 0: "...Nomor Faktur", Line 1: "16 Feb 2026 FJ2026-020583")
-    if "invoice_id" not in metadata:
-        for i, line in enumerate(lines):
-            if re.search(r'Nomor\s*Faktur|Invoice\s*Id', line, re.IGNORECASE):
-                # Check next line for an ID-like value (contains letters + numbers)
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    # Look for pattern like FJ2026-020583 (alphanumeric with dash)
-                    id_match = re.search(r'([A-Z]{1,5}[\d-]{5,}[\d]+)', next_line)
-                    if id_match:
-                        metadata["invoice_id"] = id_match.group(1)
-                break
-
-    return metadata
 
 
 def extract_header_fields_from_text(text: str, label_field_map: dict[str, str]) -> dict:
     """Extract values from PDF/image header text by matching labels.
 
     Label-based: admin defines label text (e.g. "Invoice Id", "Customer", "Telp")
-    and the system finds the line containing that label and extracts the value after it.
+    via Header Field Mappings in Templates. The system finds the line containing
+    that label and extracts the value after it.
 
     Args:
         text: Raw text from first page of PDF/image
@@ -112,7 +46,6 @@ def extract_header_fields_from_text(text: str, label_field_map: dict[str, str]) 
                 after = re.sub(r'^[\s:.\-/]+', '', after).strip()
 
                 # Stop at next known label on same line
-                # e.g. "081911630168 Customer: PT. CANTIK..." → stop before "Customer"
                 best_end = len(after)
                 for other_label in all_labels_lower:
                     if other_label == label_lower:

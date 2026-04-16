@@ -144,13 +144,21 @@ class ReviewBatchView(LoginRequiredMixin, StaffOrAdminMixin, View):
 
         all_rows = run.import_rows.order_by("row_number")
 
-        # Counts for filter tabs
+        # Counts for filter tabs (single query with conditional aggregation)
+        from django.db.models import Count, Q
+        agg = all_rows.aggregate(
+            total=Count("pk"),
+            pending=Count("pk", filter=Q(review_decision=ImportRow.DECISION_PENDING)),
+            approved=Count("pk", filter=Q(review_decision=ImportRow.DECISION_APPROVED)),
+            rejected=Count("pk", filter=Q(review_decision=ImportRow.DECISION_REJECTED)),
+            problem=Count("pk", filter=Q(row_status__in=["invalid", "warning"])),
+        )
         counts = {
-            "all":      all_rows.count(),
-            "pending":  all_rows.filter(review_decision=ImportRow.DECISION_PENDING).count(),
-            "approved": all_rows.filter(review_decision=ImportRow.DECISION_APPROVED).count(),
-            "rejected": all_rows.filter(review_decision=ImportRow.DECISION_REJECTED).count(),
-            "problem":  all_rows.filter(row_status__in=["invalid", "warning"]).count(),
+            "all": agg["total"],
+            "pending": agg["pending"],
+            "approved": agg["approved"],
+            "rejected": agg["rejected"],
+            "problem": agg["problem"],
         }
 
         # Apply filter
@@ -461,7 +469,7 @@ class FinalizeView(LoginRequiredMixin, StaffOrAdminMixin, View):
                 details={
                     "import_code": master_import.code,
                     "records": created_count,
-                    "skipped": skipped,
+                    "skipped": skipped_count,
                     "batch_id": run.batch_id,
                 },
                 request=request,

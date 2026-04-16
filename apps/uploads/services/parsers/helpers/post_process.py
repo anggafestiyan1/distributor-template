@@ -94,8 +94,9 @@ def clean_table_result(
     #   "12.00 PCS" -> "12"
     #   "12.00"     -> "12"
     #   "48,500.00" -> "48,500.00" (keep prices as-is, they have commas)
+    # \s* (not \s+) so OCR output like "12.00PCS" without a space also matches.
     _UNIT_SUFFIXES = re.compile(
-        r'\s+(PCS|PC|BOX|KG|SET|BTL|UNIT|PACK|DUS|LSN|LBR|CTN)\b',
+        r'(?<=\d)\s*(PCS|PC|BOX|KG|SET|BTL|UNIT|PACK|DUS|LSN|LBR|CTN)\b',
         re.IGNORECASE,
     )
     for row in all_rows:
@@ -103,7 +104,7 @@ def clean_table_result(
             if not v:
                 continue
             val = v.strip()
-            # Strip unit suffix: "12.00 PCS" -> "12.00"
+            # Strip unit suffix: "12.00 PCS" / "12.00PCS" -> "12.00"
             val = _UNIT_SUFFIXES.sub("", val).strip()
             # Strip trailing .00: "12.00" -> "12"
             m = re.match(r'^(\d+)\.0+$', val)
